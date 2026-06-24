@@ -1,0 +1,13 @@
+# Streamlit server configuration for Francis.
+#
+# maxUploadSize is the upload limit, in MB. For a single CSV it caps the file
+# itself; for a ZIP it caps the COMPRESSED archive. Streamlit enforces it during
+# upload, before any app code runs. Keep it in sync with the limits documented in
+# user_guide.md ("File size limit: 200 MB").
+#
+# The uncompressed safety caps (zip-bomb / OOM protection) live separately in
+# load_data(): MAX_TOTAL_MB and MAX_OUTPUT_MB. Those are sized to the server's
+# RAM (~7.5GB VM, shared with Paco), not to this value.
+[server]
+enableStaticServing = true
+maxUploadSize = 200

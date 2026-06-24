@@ -1,0 +1,55 @@
+{
+  "glob_use_min_rows": true,
+  "glob_loops": [
+    "trials"
+  ],
+  "glob_part_col": "computer_number",
+  "glob_min_row_count": 89,
+  "glob_show_counts": false,
+  "glob_group_method": "File Name (1 file = 1 row)",
+  "glob_keep_cols": [],
+  "rt_blocks": [
+    "4fa16a9f-9465-44a8-8589-39e78cc9b7d0"
+  ],
+  "err_blocks": [
+    "4bf7fc6d-1b2a-4f42-87d8-7002277231dd"
+  ],
+  "trans_blocks": [
+    "ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d"
+  ],
+  "rt_filt_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": true,
+  "rt_dv_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": "response_rt",
+  "rt_suf_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": "_no_errors",
+  "rt_meas_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": "Mean",
+  "rt_out_sc_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": "Per Condition",
+  "rt_out_th_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": 3.0,
+  "rt_out_en_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": true,
+  "rt_ms_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": true,
+  "rt_out_mt_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": "Median Absolute Deviation (MAD)",
+  "rt_min_tr_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": 10,
+  "rt_grp_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": [
+    "congruency",
+    "distance"
+  ],
+  "rt_filt_txt_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": "response_corr == 1",
+  "rt_inc_col_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": false,
+  "err_filt_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": true,
+  "err_inc_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": false,
+  "err_den_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": "0, 1",
+  "err_grp_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": [
+    "congruency",
+    "distance"
+  ],
+  "err_ex_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": "",
+  "err_num_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": "1",
+  "err_col_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": "response_corr",
+  "err_suf_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": "_acc",
+  "err_pct_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": true,
+  "err_excl_to_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": false,
+  "err_min_tr_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": 10,
+  "tr_ext_fe_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": true,
+  "tr_ext_min_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": 0.15,
+  "tr_ext_col_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": "response_rt",
+  "tr_ext_max_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": 1.9999999999999982,
+  "tr_type_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": "Extreme Value Rejection"
+}

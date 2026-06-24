@@ -1,0 +1,13 @@
+# Runtime visit-tracking database (and WAL sidecars) — not source
+visits.db
+visits.db-wal
+visits.db-shm
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# macOS
+.DS_Store
