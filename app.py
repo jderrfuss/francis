@@ -1200,6 +1200,18 @@ def remove_cond_rule(block_id, rule_id):
     st.session_state.pop(f"tr_cond_cond_{rule_id}", None)
     st.session_state.pop(f"tr_cond_val_{rule_id}", None)
 
+def ensure_choice(key, options, fallback):
+    """Make session_state[key] a valid choice before its selectbox renders.
+
+    Keyed selectboxes are rendered without index=: Streamlit warns when a
+    widget has a default AND its value was set via session state, which is
+    exactly what Load Configuration does. Instead, the default is written to
+    session state here when the key is missing, and a stored value that is no
+    longer among the options (e.g. a column absent from a new upload) is
+    replaced by the fallback."""
+    if st.session_state.get(key) not in options:
+        st.session_state[key] = fallback
+
 # --- CONFIG HELPERS ---
 def get_config_dict():
     """Gathers current session state for export."""
@@ -1863,12 +1875,10 @@ with st.sidebar:
             part_options = ["(None)"] + raw_cols
             default_ix = part_options.index('participant') if 'participant' in part_options else 0
             
-            # Key Logic: Initialize default if key missing, then create widget without default args
             part_key = "glob_part_col"
-            # Note: Selectbox uses string value in session state automatically if present
-            
+            ensure_choice(part_key, part_options, part_options[default_ix])
             part_col_select = st.selectbox(
-                "Participant ID Column (for labels)", part_options, index=default_ix,
+                "Participant ID Column (for labels)", part_options,
                 key=part_key,
                 help="Select the column representing the participant ID. This will be included in the output file."
             )
@@ -2376,10 +2386,8 @@ with tab_trans:
                         if new_name in other_names:
                             st.warning(f"⚠️ Another block also creates a column called '{new_name}'. Rename one to avoid a conflict.")
 
-                curr_a = st.session_state.get(k_a, "")
-                try: ix_a = opts_a.index(curr_a)
-                except ValueError: ix_a = 0
-                st.selectbox("Column to Shift", opts_a, key=k_a, index=ix_a,
+                ensure_choice(k_a, opts_a, "")
+                st.selectbox("Column to Shift", opts_a, key=k_a,
                              help="The column whose values will be shifted into the new column.")
                 st.number_input("Shift Amount (+1 = previous trial, −1 = next trial)", step=1, key=k_amt,
                                 help="Positive values look back; negative values look forward. "
@@ -2413,17 +2421,10 @@ with tab_trans:
                 if k_op   not in st.session_state: st.session_state[k_op]   = _ops[0]
                 if k_b    not in st.session_state: st.session_state[k_b]    = ""
 
-                curr_a = st.session_state.get(k_a, "")
                 opts_a = [""] + all_cols
-                try: ix_a = opts_a.index(curr_a)
-                except ValueError: ix_a = 0
-
-                curr_op = st.session_state.get(k_op, _ops[0])
-                try: ix_op = _ops.index(curr_op)
-                except ValueError: ix_op = 0
-
-                is_unary = curr_op in _unary_ops
-                curr_b_val = st.session_state.get(k_b, "")
+                ensure_choice(k_a, opts_a, "")
+                ensure_choice(k_op, _ops, _ops[0])
+                is_unary = st.session_state[k_op] in _unary_ops
 
                 st.text_input("New Column Name", key=k_name, placeholder="e.g. log_rt",
                               help="Name for the new column. Avoid spaces.")
@@ -2437,15 +2438,14 @@ with tab_trans:
                         if new_name in other_names:
                             st.warning(f"⚠️ Another block also creates a column called '{new_name}'. Rename one to avoid a conflict.")
 
-                st.selectbox("Column A", opts_a, key=k_a, index=ix_a,
+                st.selectbox("Column A", opts_a, key=k_a,
                              help="The primary column for the operation.")
-                st.selectbox("Operator", _ops, key=k_op, index=ix_op)
+                st.selectbox("Operator", _ops, key=k_op)
 
                 if not is_unary:
                     opts_b = [""] + all_cols
-                    try: ix_b = opts_b.index(curr_b_val)
-                    except Exception: ix_b = 0
-                    st.selectbox("Column B", opts_b, key=k_b, index=ix_b,
+                    ensure_choice(k_b, opts_b, "")
+                    st.selectbox("Column B", opts_b, key=k_b,
                                  help="The secondary column for the operation.")
 
                 if len(st.session_state.trans_blocks) > 1:
@@ -3167,7 +3167,18 @@ with tab_err:
                     nan_cols_to_show = []
 
                     if "(None)" not in groups:
-                        combs = sort_combs(df_main_process[groups].drop_duplicates(), groups)
+                        # Apply the trial filter first so the condition list reflects
+                        # the filtered data, as the RT tab does. Otherwise a value the
+                        # filter excludes (e.g. cond != 'none') still becomes a
+                        # condition and yields an all-NaN output column. Same safety
+                        # gate and silent fallback as the RT preview.
+                        filtered_df = df_main_process
+                        if extra_filt_err.strip() and _check_expr_safety(extra_filt_err):
+                            try:
+                                filtered_df = df_main_process.query(extra_filt_err, local_dict={}, global_dict={})
+                            except Exception:
+                                filtered_df = df_main_process
+                        combs = sort_combs(filtered_df[groups].drop_duplicates(), groups)
                         # Drop condition combinations with a missing grouping value, as
                         # the RT tab does. Otherwise a `col == nan` query is generated
                         # for each NaN combo, which raises (or matches nothing) — one
