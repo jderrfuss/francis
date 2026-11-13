@@ -1,34 +1,103 @@
-This guide follows the layout of the app. The sidebar on the left handles global settings and export; the tabs on the right define how your data are preprocessed and analysed.
+Francis combines participant CSV files and calculates reaction-time and accuracy summaries by condition. Try the example below, then use the rest of this guide as a reference.
 
 ## Getting started
 
-### What Francis does
+Download these two example files:
 
-Francis takes one CSV file per participant, combines them, and produces a single spreadsheet with one row per participant and one column per experimental condition. It also applies a preprocessing pipeline — removing incomplete experiments, rejecting extreme reaction times, and excluding statistical outliers — before computing the measures you ask for.
+<a href="static/distance_flanker_data.zip" download><strong>⬇ Download example data (.zip)</strong></a><br>
+<a href="static/distance_flanker.json" download><strong>⬇ Download example settings (.json)</strong></a>
+
+1. In the sidebar, use **Upload Data** to select the example ZIP. Keep it zipped.
+2. Expand **Load Configuration**, select the example settings JSON, and click **Apply Settings**. Look for **Settings applied successfully.** below the button.
+3. Click **Run Analysis & Prepare Downloads** in the sidebar.
+4. When the ready message appears, click **Download Analysis (.zip)**. Open the extracted folder to find `results.csv`, `settings_report.md`, and `run_configuration.json`.
+
+**What to expect:** the results contain **nine participants**, with mean RTs in milliseconds and percentage accuracies for four conditions. The example settings exclude one incomplete participant file. See [Example dataset](#example-dataset) for the task and analysis details.
+
+To try your own data next, select your CSV or ZIP and configure the analysis tabs. RT, accuracy and condition columns are available automatically; the optional metadata field only adds extra columns to the results.
+
+---
+
+## Files, limits and privacy
 
 ### Supported files
 
 Francis accepts:
 
-- **A single CSV file** — one output file for one participant. File size limit: 200 MB
-- **A ZIP archive containing multiple CSV files** — the most common case. Compress all participant files into one ZIP and upload it. Files inside subfolders are included automatically; macOS metadata files (`__MACOSX`) are ignored. File size limit: 200 MB total uncompressed, 50 MB per individual uncompressed file
+- **A single CSV file** — select it directly. File size limit: 200 MB
+- **A ZIP archive containing multiple CSV files** — the most common case. Compress the participant files into one ZIP and upload it. The selected ZIP can be up to 200 MB; its CSV data can total up to 200 MB uncompressed, with a 50 MB limit per individual uncompressed CSV. Files inside subfolders are included automatically; macOS metadata files (`__MACOSX`) are ignored.
+
+Unique filenames stay unchanged. If files in different folders share a filename, Francis uses their full ZIP paths to keep them distinct. A ZIP containing repeated CSV entries at exactly the same path is rejected; recreate the archive with one entry per CSV path.
+
+If a CSV cannot be read, Francis skips it and shows a warning naming the file and the reason. Readable files still load; the skipped file's data are excluded. Review these warnings before analysing or exporting. The warnings remain visible while that dataset is selected. If no CSV can be read, no dataset is loaded.
+
+### File sizes and memory
+
+These limits help control browser memory use. A CSV can take considerably more memory after loading, and analysis and export need additional working memory. A file within the size limits can still be too large for a particular computer; Francis also checks the loaded dataset's memory use.
 
 ### Privacy notice
 
-You must tick the privacy confirmation box before the file uploader appears. Do not upload files that contain participants' real names, email addresses, or any other unanonymised identifiers.
+Your files stay on your computer. Francis runs entirely inside your web browser, so the files you select are processed locally and are never uploaded to a server.
+
+The browser loads the app files from the Francis website or your local launcher. It downloads the pinned runtime from jsDelivr and Python Package Index file servers, which may keep ordinary access logs. Francis processes your selected files inside the tab.
+
+### Startup and saving your work
+
+The first visit downloads the app and its runtime; allow extra loading time and an internet connection for startup.
+
+Francis keeps your data, settings and prepared downloads in the browser tab. Closing or reloading the tab ends that working session. Your browser can unload an inactive tab to free memory and reload it when you return. The timing depends on your browser settings and available memory.
+
+Before stepping away, click **Save Current Configuration (.json)** in the sidebar and download any results you want to keep. To resume after a reload, upload the same data and apply the saved JSON under **Load Configuration**.
+
+---
+
+## Working with your data
+
+The sidebar handles global settings and export; the tabs define preprocessing and analysis. All five tabs are visible immediately. Before data are loaded, the processing tabs explain how to begin.
+
+### Loading a configuration
+
+Load configuration files saved by Francis from sources you trust. After loading, review the filters, preprocessing and analysis settings before running an analysis.
+
+Files that fail validation are not applied. Obtain a fresh copy saved by Francis. Review any missing-column warnings before applying a partial match to your dataset.
+
+Selecting a settings file validates it but does not apply it. Click **Apply Settings**; **Settings applied successfully.** then appears below the button. For a partial match, the confirmation says that available settings were applied and missing columns were skipped. Choosing another settings file clears the previous confirmation.
+
+### Replacing a dataset
+
+The first upload, or replacing data before changing any settings, starts a fresh analysis without an extra question.
+
+If you have changed the setup, selecting a replacement dataset asks whether to **Reset settings** or **Keep settings**. Your setup is preserved until you choose; the new data are not loaded or analysed while the choice is pending. Reset clears preprocessing and analysis blocks and global filters, including the minimum-row setting. Keep reuses your setup when the new data have the same columns; a different column layout causes a reset with an explanation.
+
+The choice applies to that replacement only. Your setup is also preserved if you remove the current file before choosing another, cancel an upload and retry, or select another file while a kept-settings upload is being read. Previous results and the configuration-file selection are cleared when the new dataset is loaded. Use **Save Current Configuration** for a reusable copy, or explicitly load a saved configuration and review any reported mismatches.
+
+### Progress and cancellation
+
+Reading an upload and preparing preprocessed CSV data show a progress bar with **Cancel** below it. Quick previews and analyses show their result directly. Longer previews or **Run Analysis** operations show a stable **Preparing…** message with **Cancel** beneath it, rather than percentages that restart between internal steps.
+
+Cancellation takes effect at the next processing checkpoint; a single CSV parse or calculation may need to finish first.
+
+Uploading uses one continuous progress bar. It stays full during the brief final collation step instead of restarting for a separate phase.
+
+- Cancelling an upload clears that selection and its incomplete data. Choose the file again to retry.
+- Cancelling an analysis or preview keeps your data and settings. No incomplete result is offered for download. A previous completed export may remain available with its existing generation time and settings-change warning.
+- Cancelling preparation of preprocessed data keeps the dataset and lets you prepare the CSV again.
+
+Completed exports display a ready message and a check mark in the browser-tab title. Save the files using the download buttons.
 
 ### How column names are handled
 
 Francis modifies column names on load: any character that is not a letter, digit, or underscore is replaced with an underscore. In practice this means dots become underscores — so PsychoPy's `key_resp.rt` becomes `key_resp_rt` and `key_resp.corr` becomes `key_resp_corr` everywhere in the app. Keep this in mind when writing filter expressions.
 
+If a column mixes text and numeric values, the upload warning identifies the column and example source files. A value read as text, such as `'1'`, can form a separate condition from numeric `1` or be missed by a numeric accuracy filter. Check the values in the named CSVs and reload the corrected data before interpreting results.
+
+CSV parsing can read `007` and `7` as the same number and treat labels such as `NA`, `None` and `null` as missing. Francis warns when it detects these changes and shows example values and files. If the affected values are meaningful IDs or condition labels, give them distinct text codes in the source CSVs, such as `id_007` and `condition_none`, then reload. Quoting the values in the CSV still allows type inference. Missing-value markers in measurement columns continue to be treated as missing.
+
 ---
 
 ## Example dataset
 
-A small example dataset is available to help you explore Francis before using it on your own data.
-
-<a href="app/static/distance_flanker_data.zip" download><strong>⬇ Download example data (.zip)</strong></a><br>
-<a href="app/static/distance_flanker.json" download><strong>⬇ Download example settings (.json)</strong></a>
+The example files linked in [Getting started](#getting-started) demonstrate the following task and analysis.
 
 ### The task
 
@@ -60,7 +129,7 @@ Click **Run Analysis & Prepare Downloads** to produce the output CSV.
 ### 1. Input Data
 
 **Participant ID Column**
-Choose the column that identifies each participant (usually `participant` in PsychoPy files). If your files do not have a participant column, choose `(None)` — rows will be labelled by the source file name.
+Choose the column that identifies each participant (usually `participant` in PsychoPy files). Shift uses this column to keep trials from different participants separate within each file. If your files do not have a participant column, choose `(None)` to use the source file name.
 
 **Group Data By**
 This controls what makes up one row in the output file.
@@ -72,8 +141,12 @@ This controls what makes up one row in the output file.
 
 > ⚠️ If you select *Participant ID* but the Participant ID Column is set to `(None)`, Francis falls back to grouping by file name.
 
-**Additional Columns to Keep**
-Select any metadata columns you want to preserve in the output (e.g. `gender`, `age`). These appear at the left of the final spreadsheet alongside the participant ID.
+**Metadata Columns in Results (optional)**
+Use this only to copy participant-level metadata (e.g. `gender`, `age`, `group`) into the results CSV alongside the participant ID. Each selected column contributes the first row's value for that participant/group, so choose values that are constant within that group.
+
+**All input columns are available for analysis automatically.** You do not need to add RT, accuracy, condition or filter columns here. Choose the RT and accuracy columns in their analysis tabs and use condition/filter columns where needed. Leaving this field empty does not remove any columns from the dataset or the preprocessed-data export.
+
+This field was previously called **Additional Columns to Keep**. Existing saved configurations still work.
 
 ---
 
@@ -99,6 +172,8 @@ Select the loop(s) that correspond to your main experimental trials. Rows where 
 
 > If you select multiple loops, a row is kept if *any* of the selected loops is active — useful for designs split across several loops that all contribute to the same analysis.
 
+Francis names header-only CSVs in the upload warnings and identifies files that lose all their trials at each filter or preprocessing stage. When you group by participant ID, it also identifies IDs that lose all their trials across their files. The settings report records these exclusions with the results.
+
 ---
 
 ### 3. Reporting
@@ -122,15 +197,19 @@ Global counts are also added once per participant: `trls_total`, `trls_missing`,
 
 ### 4. Export
 
-**Save Configuration (.json)**
+**Save Current Configuration (.json)**
 Downloads all current settings — filter choices, analysis blocks, grouping options — as a JSON file. Load it in a future session to restore your exact configuration without re-entering everything by hand.
 
 **Run Analysis & Prepare Downloads**
-Runs all active Reaction Time and Error Rate analysis blocks and prepares two files for download:
-- A results CSV (one row per participant, one column per condition).
-- A Markdown settings report documenting every analysis decision, useful for methods sections and for sharing with collaborators.
+Runs the active Reaction Time and Error Rate analysis blocks and prepares one ZIP. For example, `francis_analysis_2026-11-12_14-35-09.zip` extracts to `francis_analysis_2026-11-12_14-35-09/` with three files.
 
-The download buttons appear below this button after the analysis completes. The files are a snapshot of the moment you clicked — the **Last generated at** caption shows when. If you change any settings (or the data) afterwards, the downloads keep serving that snapshot and a warning appears; click **Run Analysis & Prepare Downloads** again to refresh them.
+- `results.csv` contains one row per participant and one column per condition.
+- `settings_report.md` describes the analysis and records the upload name, SHA-256, row counts, build, and runtime.
+- `run_configuration.json` contains the settings captured for that run. Load it to restore the setup that produced the paired results.
+
+**Download Analysis (.zip)** appears after the run completes. If you edit the settings, Francis keeps the completed ZIP and shows a warning. Click **Run Analysis & Prepare Downloads** again to generate a ZIP for the updated settings.
+
+If a preprocessing edit makes a selected column unavailable, Francis keeps the selection and lists the affected blocks beside **Run Analysis & Prepare Downloads**. Restore the column or change the selection to prepare new results. Any earlier downloads still belong to the last successful run.
 
 > The **Preview Results** button within each analysis tab (see below) lets you inspect results for that tab only, without preparing the full export.
 
@@ -140,6 +219,8 @@ The download buttons appear below this button after the analysis completes. The 
 
 Preprocessing blocks remove unwanted rows or create new columns. They run in the order you define them, after the Global Filters in the sidebar. Add as many blocks as needed using the **(+) Add New Block** button. Blocks can be deleted individually if more than one exists.
 
+Use a new name for derived columns. Francis protects its source filename column and the selected participant ID column. If a block uses either name, choose a different name before preparing results.
+
 Six block types are available:
 
 ---
@@ -147,6 +228,8 @@ Six block types are available:
 ### New Column — Arithmetic
 
 Derives a new variable from one or two existing columns using arithmetic or logarithm operations. The new column is immediately available in later blocks and in the analysis tabs.
+
+Francis trims leading and trailing whitespace when you edit an Arithmetic output name. Older configurations keep the exact saved name so their column references still work. If you rename a column, update any settings or formulas that refer to its old name.
 
 | Operator | Inputs needed | Notes |
 |---|---|---|
@@ -176,11 +259,12 @@ Creates a new column by assigning values based on conditions. Each rule pairs a 
 **Setting up a New Column — Recode Values block:**
 
 1. Enter a name for the new column (e.g. `switch_rep`).
-2. Click **＋ Add Rule** to add a rule. Each rule has two fields:
+2. Choose **Output type**. **Text** preserves labels such as `001`. **Number** stores numeric scores for calculations and filters such as `score == 1`. To match the same label in Text mode, use `score == '1'`.
+3. Click **＋ Add Rule** to add a rule. Each rule has two fields:
    - **Condition** — a filter expression using the same syntax as the Trial Filter (e.g. `task == prev_task`). Multiple conditions can be combined with `and` / `or` and parentheses.
    - **Output value** — the label assigned to rows matching this condition (e.g. `repeat`).
-3. Add as many rules as needed.
-4. Enter a **Default value** for rows that match none of the rules (e.g. `switch`).
+4. Add as many rules as needed.
+5. Enter a **Default value** for rows that match none of the rules (e.g. `switch`). In Number mode, leave an output or default blank to record a missing value.
 
 The resulting column is immediately available as a grouping variable in the Reaction Times and Error Rates tabs, or as an input to later preprocessing blocks.
 
@@ -226,7 +310,9 @@ Brings the value from a neighbouring trial into the current row, creating a new 
 | **Column to Shift** | The column whose values are shifted. |
 | **Shift Amount** | How many rows to look back or forward. **+1** = previous trial; **−1** = next trial. |
 
-Shift is grouped by participant file, so the last trial of one participant's file never bleeds into the first trial of the next. The first trial in each file will have `NaN` in the new column (there is no preceding row to shift from).
+Shift keeps the current trial order within each source file and the selected participant ID. A shift of **+1** leaves the first trial for each participant in each file blank. A shift of **−1** leaves the last trial blank. When the same participant appears in multiple files, Shift starts over in each file even if results are grouped by participant ID.
+
+With the **Participant ID Column** set to `(None)`, Shift uses file boundaries alone. If a participant ID column is selected, a nonzero shift leaves the new value blank on trials whose ID is missing. Francis reports these trials in the block and the settings download.
 
 > ⚠️ **Shift and row-removal blocks:** If a **Missing Data Removal** or **Extreme Value Rejection** block appears *before* a Shift block, the shift is computed on already-filtered data. This may cause incorrect N-1 adjacency. Francis warns you if this is the case. To avoid it, place all Shift blocks *above* any row-removal blocks.
 
@@ -253,13 +339,18 @@ The new column is immediately available in later preprocessing blocks and in the
 |---|---|
 | Column names | `response_rt`, `col_a` |
 | Numbers | `45`, `0.5`, `72` |
-| Arithmetic operators | `+`, `-`, `*`, `/`, `%` (modulo), `**` (power) |
+| Arithmetic operators | `+`, `-`, `*`, `/`, `//` (floor division), `%` (modulo), `**` (power) |
 | Parentheses | `(col_a + col_b) / 2` |
-| Math functions | `sqrt(x)`, `abs(x)`, `log(x)` (natural), `log10(x)`, `exp(x)` |
+| Numeric comparisons | `response_rt > 0.5` produces a column of `True` and `False` values. |
+| Maths functions (one argument) | `sqrt(x)`, `abs(x)`, `log(x)` (natural log), `log10(x)`, `exp(x)` |
+| Rounding down or up | `floor(x)` rounds toward −∞. `ceil(x)` rounds toward +∞. |
+| Maths functions for values near zero | `log1p(x)` computes `log(1 + x)`. `expm1(x)` computes `exp(x) - 1`. Both retain precision when `x` is close to zero. |
+
+In Custom Formula, `log(x)` and `log10(x)` produce negative infinity (`-inf`) for zero inputs and a missing value (`NaN`) for negative inputs. The Arithmetic log operators leave zero inputs blank. Custom Formula keeps infinite values as calculated and shows a count of positive and negative infinities in the block and settings report. These values can carry through to analysis results.
 
 > **Column names with dots:** Francis converts all dots in PsychoPy column names to underscores when loading your files. So `resp.rt` becomes `resp_rt`, and `key_resp.corr` becomes `key_resp_corr`. Use the underscore form in your formula. The block displays a reminder of this.
 
-> **What is not supported:** String operations, conditional expressions, comparisons, and floor division (`//`). Use **New Column — Recode Values** for conditional logic.
+> Use **New Column — Recode Values** to assign different values based on conditions. The maths functions above are available in Custom Formula. Trial Filters and Recode conditions use comparisons and arithmetic.
 
 **Example:**
 
@@ -290,6 +381,8 @@ Removes trials where a numeric column (typically RT) falls outside a defined ran
 | RT Column | The column to apply the bounds to. |
 | Min RT | Trials *faster* than this value are discarded. |
 | Max RT | Trials *slower* than this value are discarded. |
+
+Both endpoints are included. A range from `0.15` to `2.0` seconds keeps trials at exactly `0.15` or `2.0` seconds.
 
 Rows where the selected column is `NaN` — or holds a non-numeric value, which is treated as `NaN` — are **not** removed by this block. Only numeric values that fall outside the range are discarded; missing values are handled by a Missing Data Removal block, not here.
 
@@ -363,7 +456,9 @@ Enable with the **Enable outlier rejection** checkbox. Two settings appear:
 | Standard Deviation (SD) | Number of SDs from the mean |  |
 | Median Absolute Deviation (MAD) | Number of MADs from the median | More robust to extreme values in the distribution itself. |
 | Double MAD | Number of MADs (asymmetric) | Separate upper and lower bounds. Well-suited to skewed RT distributions. |
-| Percentage Trimming | % trimmed from each end | Removes the fastest X% and slowest X% of trials symmetrically. |
+| Percentage Trimming | Percentile cutoff at each end | Removes trials strictly below the lower cutoff or strictly above the upper cutoff. |
+
+For example, 20% trimming uses the 20th and 80th percentiles. With six distinct values and **Per Condition** scope, this removes one trial at each end. Trials exactly at a cutoff are kept, so sample size and ties affect how many trials are removed. To see the actual number removed for each condition, enable **Include trial counts and outlier limits** in the sidebar and look for `_trls_outlier` in the results.
 
 > Outlier rejection is skipped for any condition with fewer than 4 valid trials. These are listed in a warning after the analysis runs.
 
@@ -393,7 +488,7 @@ An optional short label appended to every output column name for this block. Use
 Ticked by default. For raw RT columns, an RT of 0 is physically impossible and usually indicates a recording error, so such trials are excluded before the summary measure and the outlier bounds are computed. Untick this if 0 is a meaningful value for your dependent variable — for example difference scores, or log-transformed values (ln of an RT of exactly 1 s is 0). Zeros are always included for Sum and Count, where 0 is often a valid data point (e.g. a Likert scale item scored 0).
 
 **Convert s to ms**
-If your RT column is in seconds (PsychoPy's default), tick this to multiply the output values by 1,000. Applies to Mean and Median only; outlier bounds are also converted.
+If your RT column is in seconds (PsychoPy's default), tick this to convert the final mean or median to milliseconds. Francis computes the summary in seconds, multiplies it by 1,000, then rounds once to the nearest millisecond. Exact halfway values round to the even integer. For example, 450.5 ms rounds to 450 ms and 451.5 ms rounds to 452 ms. Reported outlier bounds are also converted to milliseconds.
 
 **Minimum trials per condition**
 If the number of valid trials in a condition — after all filtering and outlier rejection — falls below this value, the result is set to `NaN` rather than computing a potentially unreliable summary. Default is 1 (no minimum enforced).
@@ -533,14 +628,14 @@ Use `and` and `or` with parentheses:
 
 ## Saving and reusing settings
 
-After configuring your analysis, click **Save Configuration** in the sidebar to download a `.json` file. This stores all widget states — analysis blocks, filter choices, column selections, and outlier settings — so you can reproduce the exact same analysis later or share it with a collaborator.
+Click **Save Current Configuration** to save your current setup. To reproduce a completed run, use `run_configuration.json` from that run’s timestamped analysis ZIP.
 
 To reload a configuration in a future session:
 
 1. Upload your data as usual.
 2. Expand **Load Configuration** in the sidebar (visible after data is uploaded).
 3. Upload the `.json` file.
-4. Click **Apply Settings**.
+4. Click **Apply Settings** and look for **Settings applied successfully.** below the button. A partial match confirms that available settings were applied and missing columns were skipped.
 
 > If columns referenced in the configuration are missing from the current dataset (e.g. a different experiment version), Francis warns you and skips those settings rather than crashing.
 
@@ -550,7 +645,7 @@ To reload a configuration in a future session:
 
 The downloaded CSV has this column order:
 
-1. **Participant/metadata** — participant ID, any Additional Columns to Keep, source file name.
+1. **Participant/metadata** — participant ID if selected, any optional Metadata Columns in Results, and the source filename in either grouping mode. Each selected column appears once.
 2. **Global trial counts** — `trls_total`, `trls_missing`, `trls_extreme_global`, `trls_valid_global` (only if *Include trial counts* is checked).
 3. **Analysis results** — one column per condition per analysis block, from RT blocks first then Error Rate blocks.
 4. **Diagnostic counts** — per-condition counts and outlier bounds (only if *Include trial counts* is checked).
@@ -558,6 +653,10 @@ The downloaded CSV has this column order:
 ---
 
 ## Frequently asked questions
+
+**Do I need to add my RT or accuracy columns to Metadata Columns in Results?**
+
+No. All input columns are available in the analysis tabs and filters automatically. This optional field adds extra participant metadata to the results CSV; it does not control which columns can be analysed.
 
 **My filter expression doesn't work — the column name looks right.**
 

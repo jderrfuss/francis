@@ -50,6 +50,6 @@
   "tr_ext_fe_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": true,
   "tr_ext_min_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": 0.15,
   "tr_ext_col_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": "response_rt",
-  "tr_ext_max_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": 1.9999999999999982,
+  "tr_ext_max_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": 2.0,
   "tr_type_ff1d33ac-9bfe-45ac-bdf4-b0b164ddbe9d": "Extreme Value Rejection"
 }

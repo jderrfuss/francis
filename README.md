@@ -12,6 +12,21 @@ exclusion, and flexible accuracy calculations — all without writing any code.
 > Only need to collate data without further preprocessing?
 > Try [Paco](https://paco.streamy.psychology.nottingham.ac.uk/).
 
+## Your data stays on your computer
+
+Francis runs entirely inside your web browser. It is a
+[Streamlit](https://streamlit.io/) app that runs in the browser through
+[stlite](https://github.com/whitphx/stlite) and
+[Pyodide](https://pyodide.org/). The files you select are processed in the
+browser tab and are never uploaded to a server.
+
+At startup, the browser loads the app files from the Francis website (or from
+your own computer, see below). It also downloads a fixed version of the Python
+runtime and packages from jsDelivr and the Python Package Index. Those versions
+are pinned in [`app_source/runtime-manifest.json`](app_source/runtime-manifest.json).
+This version of Francis has been tested in Chromium-based browsers such as
+Chrome. It has not yet been tested in Firefox or Safari.
+
 ## Features
 
 - **Collate** any number of PsychoPy CSV files from a single ZIP (or a single
@@ -27,24 +42,47 @@ exclusion, and flexible accuracy calculations — all without writing any code.
   optional outlier rejection (SD, MAD, Double MAD, or percentage trimming).
 - **Error rate analysis:** flexible numerator/denominator ratios for error or
   accuracy rates, with optional exclusion of no-response trials.
-- **Reproducibility:** save and reload your full configuration as JSON, and
-  export a human-readable settings report alongside the results.
-- Download the collated results, the preprocessed data, and the settings report.
+- **Reproducibility:** save and reload your full configuration as JSON. Each
+  analysis download contains the results, a human-readable settings report and
+  the exact configuration used.
+- Download the results and, separately, the preprocessed trial-level data.
 
-## Running locally
+The [User Guide](app_source/user_guide.md) (also shown in the app) explains
+every option and includes an example dataset.
 
-Francis is a single-file [Streamlit](https://streamlit.io/) app.
+## Versions
 
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
+Each release of Francis is tagged with its build ID (for example
+`2026-11-13.3`), which is also shown in the app's sidebar. To get the exact
+version you used, open the tag on GitHub and download it as a ZIP via
+**Code → Download ZIP**.
 
-Then open the URL Streamlit prints (typically http://localhost:8501).
+The earlier version, which ran on a server rather than in the browser, is
+available under the tag
+[`server-version-final`](https://github.com/jderrfuss/francis/tree/server-version-final).
 
-The maximum upload size is configured in `.streamlit/config.toml`
-(`maxUploadSize`, in MB). The uncompressed safety caps (zip-bomb / OOM
-protection) live in `load_data()` in `app.py`.
+## Running Francis on your own computer
+
+You can run any version from your own computer instead of the website, for
+example to keep using an exact version. You need Python 3 and a browser. An
+internet connection is still needed at startup to download the runtime.
+
+1. Download and extract this repository (or a tagged version, see above).
+2. Open a terminal in the extracted folder and run:
+
+   ```bash
+   python3 -m http.server 8000 --bind 127.0.0.1 --directory app_source
+   ```
+
+   On Windows, use `py -3` in place of `python3`.
+
+3. Open http://127.0.0.1:8000/ in your browser. Leave the terminal open while
+   you use Francis, and press **Ctrl+C** to stop it.
+
+The page must be served like this. Opening `index.html` directly does not
+work, because the browser blocks it from loading the app files. Keep
+`--bind 127.0.0.1`: without it, the server is reachable from other computers on
+your network. If port 8000 is in use, choose another number.
 
 ## How to cite
 

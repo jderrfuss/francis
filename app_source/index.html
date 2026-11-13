@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Francis</title>
+    <!--
+      stlite runs Python (Pyodide) and Streamlit
+      inside this page, so data files selected in the app are processed locally
+      and never sent to a server. Only the code below is downloaded.
+
+      Must be served over http(s) (e.g. `python3 -m http.server`), not opened as
+      a file:// URL, because app.py and user_guide.md are fetched next to this
+      page. The example files linked from the User Guide are plain files in
+      static/ next to this page; they are not mounted into Python.
+    -->
+    <style>
+      /* Streamlit draws dropdown menus in pop-ups attached to <body>, outside
+         the area stlite styles, so without this they fall back to Times. */
+      body { font-family: "Source Sans", sans-serif; }
+      /* Francis takes one file per uploader (a ZIP or CSV of data, a JSON of
+         settings). Streamlit still shows an "Add files" (+) button next to the
+         chosen file, which suggests more can be added (choosing one there
+         would only replace it). Hide it; the file can still be removed with
+         its × or replaced by dropping another. If Streamlit renames the label,
+         the + simply reappears. */
+      [data-testid="stFileUploader"] button[aria-label="Add files"] { display: none; }
+      .francis-loading { max-width: 704px; margin: 6rem auto; padding: 0 16px; color: #555; }
+    </style>
+  </head>
+  <body>
+    <!-- Replaced by the app once stlite starts; shown until its script loads. -->
+    <div id="root"><p class="francis-loading">Loading Francis… The first visit downloads about 30 MB and can take up to a minute.</p></div>
+    <noscript><p class="francis-loading">Francis runs in your browser and needs JavaScript enabled.</p></noscript>
+    <script type="module">
+      function loadVerifiedAsset(element, integrity, name) {
+        // Browsers ignore missing or invalid integrity metadata. Require the pin
+        // before adding the element so the browser can reject a mismatch.
+        if (typeof integrity !== "string" || !/^sha384-[A-Za-z0-9+/]{64}$/.test(integrity)) {
+          throw new Error(`Missing or invalid integrity pin for ${name}.`);
+        }
+        element.integrity = integrity;
+        element.crossOrigin = "anonymous";
+        return new Promise((resolve, reject) => {
+          element.addEventListener("load", resolve, { once: true });
+          element.addEventListener("error", () => {
+            reject(new Error(`Could not load or verify ${name}.`));
+          }, { once: true });
+          document.head.append(element);
+        });
+      }
+
+      // Version Python, guide and runtime settings together on each release so
+      // stlite cannot combine a cached entrypoint with a different engine.
+      const build = "2026-11-13.3";
+      const v = "?v=" + build;
+      const root = document.getElementById("root");
+
+      function showStartupError(error) {
+        console.error("Francis startup failed", error);
+        root.innerHTML =
+          '<p class="francis-loading" role="alert">Francis could not start. Reload to try again.</p>';
+      }
+
+      try {
+        const response = await fetch("./runtime-manifest.json" + v);
+        if (!response.ok) throw new Error("Could not read the runtime manifest.");
+        const runtime = await response.json();
+        const stylesheet = document.createElement("link");
+        stylesheet.rel = "stylesheet";
+        stylesheet.href = runtime.stlite.stylesheet;
+        const script = document.createElement("script");
+        script.type = "module";
+        script.src = runtime.stlite.script;
+        await Promise.all([
+          loadVerifiedAsset(stylesheet, runtime.stlite.stylesheet_integrity, "the stlite stylesheet"),
+          loadVerifiedAsset(script, runtime.stlite.script_integrity, "the stlite entry script"),
+        ]);
+        // The verified module is already in the browser's module map. Import
+        // it after the load event to access its exports without another fetch.
+        const { mount } = await import(script.src);
+        const controller = mount(
+          {
+            entrypoint: "app.py",
+            files: {
+              "app.py": { url: "./app.py" + v },
+              "analysis_engine.py": { url: "./analysis_engine.py" + v },
+              // Read by _render_guide() from next to app.py.
+              "user_guide.md": { url: "./user_guide.md" + v },
+              "francis-build.json": { data: JSON.stringify({ Francis: build, stlite: runtime.stlite.version }) },
+            },
+            requirements: runtime.requirements,
+            // Install these exact pure-Python wheels before micropip resolves
+            // stlite's broader ranges. Exact requirements alone can conflict.
+            prebuiltPackageNames: Object.values(runtime.wheels).map(item => item.url),
+            pyodideUrl: runtime.pyodide_url,
+            streamlitConfig: {
+              // Keep in sync with "File size limit: 200 MB" in user_guide.md.
+              "server.maxUploadSize": 200,
+              "client.toolbarMode": "viewer",
+              "browser.gatherUsageStats": false,
+            },
+          },
+          root,
+        );
+        // stlite 1.9.2 reports worker startup through its internal kernel.
+        const kernel = controller._kernel;
+        const onWorkerStartupError = (event) => {
+          controller.unmount();
+          showStartupError(event.detail);
+        };
+        kernel?.addEventListener("loadError", onWorkerStartupError, { once: true });
+        kernel?.addEventListener("loadFinished", () => {
+          kernel.removeEventListener("loadError", onWorkerStartupError);
+        }, { once: true });
+      } catch (error) {
+        showStartupError(error);
+      }
+    </script>
+  </body>
+</html>

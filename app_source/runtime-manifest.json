@@ -1,0 +1,181 @@
+{
+  "stlite": {
+    "version": "1.9.2",
+    "script": "https://cdn.jsdelivr.net/npm/@stlite/browser@1.9.2/build/stlite.js",
+    "script_integrity": "sha384-jMNuhneKKWW1pWKG3hEPz8avt+Z4H/vCpv7k+ZCvmjodEle94RJmwLznSmnrd62h",
+    "stylesheet": "https://cdn.jsdelivr.net/npm/@stlite/browser@1.9.2/build/stlite.css",
+    "stylesheet_integrity": "sha384-CwZ0la+J2+JJW45I0fE1ZRP/vgRiyXEi+yQn9Ft6HpdvjHblYJKeSII1lyy1F2hj"
+  },
+  "pyodide_url": "https://cdn.jsdelivr.net/pyodide/v0.29.3/full/pyodide.mjs",
+  "requirements": [
+    "pandas==2.3.3",
+    "protobuf==7.36.2",
+    "python-multipart==0.0.32",
+    "blinker==1.9.0",
+    "itsdangerous==2.2.0"
+  ],
+  "environment": {
+    "packages": {
+      "altair": {
+        "source": "pyodide",
+        "version": "6.0.0"
+      },
+      "anyio": {
+        "source": "pyodide",
+        "version": "4.9.0"
+      },
+      "attrs": {
+        "source": "pyodide",
+        "version": "25.2.0"
+      },
+      "blinker": {
+        "source": "https://files.pythonhosted.org/packages/10/cb/f2ad4230dc2eb1a74edf38f1a38b9b52277f75bef262d8908e60d957e13c/blinker-1.9.0-py3-none-any.whl",
+        "version": "1.9.0"
+      },
+      "cramjam": {
+        "source": "pyodide",
+        "version": "2.10.0rc1"
+      },
+      "fastparquet": {
+        "source": "pyodide",
+        "version": "2024.11.0"
+      },
+      "fsspec": {
+        "source": "pyodide",
+        "version": "2025.3.2"
+      },
+      "itsdangerous": {
+        "source": "https://files.pythonhosted.org/packages/04/96/92447566d16df59b2a776c0fb82dbc4d9e07cd95062562af01e408583fc4/itsdangerous-2.2.0-py3-none-any.whl",
+        "version": "2.2.0"
+      },
+      "jinja2": {
+        "source": "pyodide",
+        "version": "3.1.6"
+      },
+      "jsonschema": {
+        "source": "pyodide",
+        "version": "4.23.0"
+      },
+      "jsonschema-specifications": {
+        "source": "pyodide",
+        "version": "2024.10.1"
+      },
+      "libopenssl": {
+        "source": "pyodide",
+        "version": "1.1.1w"
+      },
+      "markupsafe": {
+        "source": "pyodide",
+        "version": "3.0.2"
+      },
+      "micropip": {
+        "source": "pyodide",
+        "version": "0.11.0"
+      },
+      "narwhals": {
+        "source": "pyodide",
+        "version": "2.15.0"
+      },
+      "numpy": {
+        "source": "pyodide",
+        "version": "2.2.5"
+      },
+      "packaging": {
+        "source": "pyodide",
+        "version": "24.2"
+      },
+      "pandas": {
+        "source": "pyodide",
+        "version": "2.3.3"
+      },
+      "pillow": {
+        "source": "pyodide",
+        "version": "11.3.0"
+      },
+      "protobuf": {
+        "source": "https://files.pythonhosted.org/packages/e4/04/d52c7016b04b6c5108f26691f9d33ec82a9b65d041f1a9c771137693d618/protobuf-7.36.2-py3-none-any.whl",
+        "version": "7.36.2"
+      },
+      "pyodide-http": {
+        "source": "pyodide",
+        "version": "0.2.2"
+      },
+      "pyrsistent": {
+        "source": "pyodide",
+        "version": "0.20.0"
+      },
+      "python-dateutil": {
+        "source": "pyodide",
+        "version": "2.9.0.post0"
+      },
+      "python-multipart": {
+        "source": "https://files.pythonhosted.org/packages/e1/04/e8135ebd1ad02c56ec633277529b2602ff99ff634be76cdba5744cf554fd/python_multipart-0.0.32-py3-none-any.whl",
+        "version": "0.0.32"
+      },
+      "pytz": {
+        "source": "pyodide",
+        "version": "2025.2"
+      },
+      "referencing": {
+        "source": "pyodide",
+        "version": "0.36.2"
+      },
+      "rpds-py": {
+        "source": "pyodide",
+        "version": "0.30.0"
+      },
+      "six": {
+        "source": "pyodide",
+        "version": "1.17.0"
+      },
+      "sniffio": {
+        "source": "pyodide",
+        "version": "1.3.1"
+      },
+      "ssl": {
+        "source": "pyodide",
+        "version": "1.0.0"
+      },
+      "starlette": {
+        "source": "pyodide",
+        "version": "0.47.2"
+      },
+      "stlite-lib": {
+        "source": "https://cdn.jsdelivr.net/npm/@stlite/browser@1.9.2/build/wheels/stlite_lib-0.1.0-py3-none-any.whl",
+        "version": "0.1.0"
+      },
+      "streamlit": {
+        "source": "https://cdn.jsdelivr.net/npm/@stlite/browser@1.9.2/build/wheels/streamlit-1.62.0-cp313-none-any.whl",
+        "version": "1.62.0"
+      },
+      "typing-extensions": {
+        "source": "pyodide",
+        "version": "4.15.0"
+      }
+    },
+    "pyodide": "0.29.3",
+    "python": "3.13.2"
+  },
+  "wheels": {
+    "protobuf": {
+      "version": "7.36.2",
+      "url": "https://files.pythonhosted.org/packages/e4/04/d52c7016b04b6c5108f26691f9d33ec82a9b65d041f1a9c771137693d618/protobuf-7.36.2-py3-none-any.whl",
+      "sha256": "bdb3a345d48db958e6ce1f18e508beb0cc981d64f24088427549c866cd039f1e"
+    },
+    "python-multipart": {
+      "version": "0.0.32",
+      "url": "https://files.pythonhosted.org/packages/e1/04/e8135ebd1ad02c56ec633277529b2602ff99ff634be76cdba5744cf554fd/python_multipart-0.0.32-py3-none-any.whl",
+      "sha256": "ff6d3f776f16878c894e52e107296ffc890e913c611b1a4ec6c44e2821fe2e23"
+    },
+    "blinker": {
+      "version": "1.9.0",
+      "url": "https://files.pythonhosted.org/packages/10/cb/f2ad4230dc2eb1a74edf38f1a38b9b52277f75bef262d8908e60d957e13c/blinker-1.9.0-py3-none-any.whl",
+      "sha256": "ba0efaa9080b619ff2f3459d1d500c57bddea4a6b424b60a91141db6fd2f08bc"
+    },
+    "itsdangerous": {
+      "version": "2.2.0",
+      "url": "https://files.pythonhosted.org/packages/04/96/92447566d16df59b2a776c0fb82dbc4d9e07cd95062562af01e408583fc4/itsdangerous-2.2.0-py3-none-any.whl",
+      "sha256": "c6242fc49e35958c8b15141343aa660db5fc54d4f13a1db01a3f5891b98700ef"
+    }
+  }
+}
