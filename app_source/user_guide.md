@@ -39,7 +39,7 @@ These limits help control browser memory use. A CSV can take considerably more m
 
 Your files stay on your computer. Francis runs entirely inside your web browser, so the files you select are processed locally and are never uploaded to a server.
 
-The browser loads the app files from the Francis website or your local launcher. It downloads the pinned runtime from jsDelivr and Python Package Index file servers, which may keep ordinary access logs. Francis processes your selected files inside the tab.
+The browser loads the app files from the Francis website, or from your own computer if you run Francis locally (see the **About** tab). It downloads the pinned runtime from jsDelivr and Python Package Index file servers, which may keep ordinary access logs. Francis processes your selected files inside the tab.
 
 ### Startup and saving your work
 

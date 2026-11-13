@@ -2400,14 +2400,15 @@ st.markdown(
 # stlite: track_visit() call removed (see the top of the file).
 
 def _render_about(build):
-    downloads = ""
+    # Each build links to its own tag on GitHub, which is pushed before the
+    # build is published (release_tools/copy_to_github.py).
+    repository = "https://github.com/jderrfuss/francis"
     if build and re.fullmatch(r"\d{4}-\d{2}-\d{2}\.\d+", build):
-        base = "https://francis.streamy.psychology.nottingham.ac.uk/downloads"
-        downloads = (
-            f"[Download Francis for local use]({base}/Francis-{build}-local.zip) "
-            "to launch it from your computer.\n\n"
-            f"[Download this release’s source and build instructions]({base}/Francis-{build}-source.zip)."
-        )
+        source = (f"[The source code of this version (build {build})]({repository}/tree/{build}) "
+                  "is on GitHub, together with instructions for running Francis on your own computer.")
+    else:
+        source = (f"[The source code]({repository}) is on GitHub, together with instructions "
+                  "for running Francis on your own computer.")
     st.markdown("""
     <div style="max-width:750px;">
     
@@ -2425,14 +2426,13 @@ def _render_about(build):
 
     Found a bug? Have a suggestion? [Email Jan](mailto:jan.derrfuss@nottingham.ac.uk)
 
-    #### Downloads and source
+    #### Source code
 
     Francis is free software (AGPL-3.0).
 
     </div>
     """, unsafe_allow_html=True)
-    if downloads:
-        st.markdown(downloads)
+    st.markdown(source)
 
 def _inject_sticky_tabs():
     """
