@@ -45,6 +45,8 @@ The browser loads the app files from the Francis website, or from your own compu
 
 The first visit downloads the app and its runtime; allow extra loading time and an internet connection for startup.
 
+**University of Nottingham VPN:** on at least some Macs connected to the University of Nottingham VPN, Francis does not load in Firefox: the page stays at "Connecting to…". The VPN's network settings give Firefox an address for the Francis website that cannot be reached through the VPN. Safari, Chrome and Brave were not affected in our tests. If this happens, open Francis in Safari or a Chromium-based browser such as Chrome or Brave, or disconnect from the VPN while you use Francis and reconnect afterwards. Francis is publicly available, so it works without the VPN.
+
 Francis keeps your data, settings and prepared downloads in the browser tab. Closing or reloading the tab ends that working session. Your browser can unload an inactive tab to free memory and reload it when you return. The timing depends on your browser settings and available memory.
 
 Before stepping away, click **Save Current Configuration (.json)** in the sidebar and download any results you want to keep. To resume after a reload, upload the same data and apply the saved JSON under **Load Configuration**.
