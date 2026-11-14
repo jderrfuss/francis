@@ -1,6 +1,6 @@
 Francis combines participant CSV files and calculates reaction-time and accuracy summaries by condition. Try the example below, then use the rest of this guide as a reference.
 
-## Getting started
+## Getting Started
 
 Download these two example files:
 
@@ -18,9 +18,9 @@ To try your own data next, select your CSV or ZIP and configure the analysis tab
 
 ---
 
-## Files, limits and privacy
+## Files, Limits and Privacy
 
-### Supported files
+### Supported Files
 
 Francis accepts:
 
@@ -31,17 +31,17 @@ Unique filenames stay unchanged. If files in different folders share a filename,
 
 If a CSV cannot be read, Francis skips it and shows a warning naming the file and the reason. Readable files still load; the skipped file's data are excluded. Review these warnings before analysing or exporting. The warnings remain visible while that dataset is selected. If no CSV can be read, no dataset is loaded.
 
-### File sizes and memory
+### File Sizes and Memory
 
 These limits help control browser memory use. A CSV can take considerably more memory after loading, and analysis and export need additional working memory. A file within the size limits can still be too large for a particular computer; Francis also checks the loaded dataset's memory use.
 
-### Privacy notice
+### Privacy Notice
 
 Your files stay on your computer. Francis runs entirely inside your web browser, so the files you select are processed locally and are never uploaded to a server.
 
 The browser loads the app files from the Francis website, or from your own computer if you run Francis locally (see the **About** tab). It downloads the pinned runtime from jsDelivr and Python Package Index file servers, which may keep ordinary access logs. Francis processes your selected files inside the tab.
 
-### Startup and saving your work
+### Startup and Saving Your Work
 
 The first visit downloads the app and its runtime; allow extra loading time and an internet connection for startup.
 
@@ -51,11 +51,11 @@ Before stepping away, click **Save Current Configuration (.json)** in the sideba
 
 ---
 
-## Working with your data
+## Working with Your Data
 
 The sidebar handles global settings and export; the tabs define preprocessing and analysis. All five tabs are visible immediately. Before data are loaded, the processing tabs explain how to begin.
 
-### Loading a configuration
+### Loading a Configuration
 
 Load configuration files saved by Francis from sources you trust. After loading, review the filters, preprocessing and analysis settings before running an analysis.
 
@@ -63,7 +63,7 @@ Files that fail validation are not applied. Obtain a fresh copy saved by Francis
 
 Selecting a settings file validates it but does not apply it. Click **Apply Settings**; **Settings applied successfully.** then appears below the button. For a partial match, the confirmation says that available settings were applied and missing columns were skipped. Choosing another settings file clears the previous confirmation.
 
-### Replacing a dataset
+### Replacing a Dataset
 
 The first upload, or replacing data before changing any settings, starts a fresh analysis without an extra question.
 
@@ -71,7 +71,7 @@ If you have changed the setup, selecting a replacement dataset asks whether to *
 
 The choice applies to that replacement only. Your setup is also preserved if you remove the current file before choosing another, cancel an upload and retry, or select another file while a kept-settings upload is being read. Previous results and the configuration-file selection are cleared when the new dataset is loaded. Use **Save Current Configuration** for a reusable copy, or explicitly load a saved configuration and review any reported mismatches.
 
-### Progress and cancellation
+### Progress and Cancellation
 
 Reading an upload and preparing preprocessed CSV data show a progress bar with **Cancel** below it. Quick previews and analyses show their result directly. Longer previews or **Run Analysis** operations show a stable **Preparing…** message with **Cancel** beneath it, rather than percentages that restart between internal steps.
 
@@ -85,7 +85,7 @@ Uploading uses one continuous progress bar. It stays full during the brief final
 
 Completed exports display a ready message and a check mark in the browser-tab title. Save the files using the download buttons.
 
-### How column names are handled
+### How Column Names Are Handled
 
 Francis modifies column names on load: any character that is not a letter, digit, or underscore is replaced with an underscore. In practice this means dots become underscores — so PsychoPy's `key_resp.rt` becomes `key_resp_rt` and `key_resp.corr` becomes `key_resp_corr` everywhere in the app. Keep this in mind when writing filter expressions.
 
@@ -95,11 +95,11 @@ CSV parsing can read `007` and `7` as the same number and treat labels such as `
 
 ---
 
-## Example dataset
+## Example Dataset
 
-The example files linked in [Getting started](#getting-started) demonstrate the following task and analysis.
+The example files linked in [Getting Started](#getting-started) demonstrate the following task and analysis.
 
-### The task
+### The Task
 
 The example data come from an **arrow flanker task**. Participants responded to a central arrow flanked by four additional arrows. The flankers could be pointing in the same direction as the target (congruent) or the opposite direction (incongruent), and they were presented either close to the target (near) or further away from it (far). This gives a 2 × 2 design with two within-subjects factors:
 
@@ -108,11 +108,11 @@ The example data come from an **arrow flanker task**. Participants responded to 
 
 Each participant completed 16 practice trials followed by 72 experimental trials. Responses and reaction times were recorded in the columns `response_corr` and `response_rt`.
 
-### The files
+### The Files
 
 The ZIP archive contains 10 PsychoPy output files — one per participant. One participant's file is incomplete (69 rows), having fewer rows than a full session (89 rows including the header). This participant is excluded automatically by the minimum row number filter configured in the example settings.
 
-### Using the example settings
+### Using the Example Settings
 
 After uploading the ZIP archive, load the example `.json` settings file using **Load Configuration** in the sidebar, then click **Apply Settings**. The configuration sets up the following pipeline:
 
@@ -296,7 +296,7 @@ Using `task` and a **Shift** block to create `prev_task` first, this produces a 
 
 Because rules are evaluated in order, a trial with RT = 0.25 matches the first rule and is labelled `fast`, never reaching the second.
 
-> The condition syntax is identical to the Trial Filter — see the **Additional Filter — syntax reference** section for full details, including how to combine conditions with `and`, `or`, and parentheses.
+> The condition syntax is identical to the Trial Filter — see the **Trial Filter — Syntax Reference** section for full details, including how to combine conditions with `and`, `or`, and parentheses.
 
 ---
 
@@ -441,7 +441,9 @@ A pandas query expression applied within each condition, after all global and pr
 - `key_resp_corr == 1` — include only correct trials (useful for computing correct-trial RT).
 - `trials_thisN >= 4` — skip the first four trials of the loop (remember that the first trial in the block will be number 0).
 
-See the **Additional Filter — syntax reference** section below for full details.
+See the **Trial Filter — Syntax Reference** section below for full details.
+
+Below the filter, Francis shows how many trials it removes, for example *The trial filter removes 1,448 of 5,760 trials (25.1%). Removed per participant: 8.0–61.0% (highest: participant 7).* The range is given per row of the results: per participant when files are merged by participant ID, otherwise per file. It is left out when there is only one. The counts include only trials the block can use (trials with a value in every grouping column). A filter that removes every trial is reported as a problem, and the analysis will not run until it is fixed.
 
 **Outlier Rejection**
 Enable with the **Enable outlier rejection** checkbox. Two settings appear:
@@ -501,6 +503,8 @@ Once you have selected at least one grouping column and a dependent variable, a 
 
 **▶ Preview Results** — runs the RT analysis and displays the results in a table below the blocks. Use this to check your analysis interactively. The full export (combined with Error Rates) is prepared by clicking on the **Run Analysis & Prepare Downloads** button in the sidebar.
 
+Below the table, a summary for each block shows how many trials each step removed, for example *12,000 trials → trial filter −1,448 (12.1%) → missing values −12 (0.1%) → outliers −212 (2.0%) → 10,328 analysed*, followed by the range per participant or file. Each percentage refers to the trials remaining before that step. For the counts per participant and condition, tick **Include trial counts and outlier limits** in the sidebar.
+
 ---
 
 ## Error Rates Tab
@@ -527,7 +531,7 @@ You can use any column here — Francis is not limited to PsychoPy accuracy colu
 
 ---
 
-### Define Accuracy
+### Define Ratio
 
 Specify which values in the target column count as the event you are measuring (numerator) and which values define the pool of relevant trials (denominator). Separate multiple values with commas.
 
@@ -560,7 +564,9 @@ An optional pandas query expression applied before counting, equivalent to the T
 
 *Example:* `block == 2` — only count trials from block 2
 
-See the **Additional Filter — syntax reference** section below.
+See the **Trial Filter — Syntax Reference** section below.
+
+As in the RT tab, Francis shows below the filter how many trials it removes. When **Exclude trials with no response** is ticked, these counts start after the no-response trials have been removed.
 
 ---
 
@@ -578,17 +584,17 @@ See the **Additional Filter — syntax reference** section below.
 
 Appears once you have selected at least one grouping column and a target column. Shows the output column names and the filter logic for each condition.
 
-**▶ Preview Results** — runs the Error Rate analysis and displays results below the blocks.
+**▶ Preview Results** — runs the Error Rate analysis and displays results below the blocks. As in the RT tab, a summary for each block follows the table: trials without a response (when excluded), trials removed by the trial filter, trials whose value is not one of the denominator values, and the number of trials in the denominator.
 
 ---
 
-## Additional Filter — syntax reference
+## Trial Filter — Syntax Reference
 
 The Trial Filter and Exclude Trials fields accept a **pandas query expression** — a concise way to select rows using column names and comparison operators. Here are the most useful patterns:
 
 > For safety, these fields accept only column names, numbers, text values, comparisons (`==`, `!=`, `<`, `>`, `<=`, `>=`), membership tests (`in [...]`), arithmetic, and the connectors `and` / `or` / `not` with parentheses. Method calls (e.g. `.str.contains(...)`) and attribute access are not permitted.
 
-### Basic examples
+### Basic Examples
 
 | Expression | Effect |
 |---|---|
@@ -600,7 +606,7 @@ The Trial Filter and Exclude Trials fields accept a **pandas query expression** 
 | `key_resp_rt >= 0.2` | Keep rows with RT ≥ 0.2 s |
 | `trials_thisN >= 4` | Skip the first four trials in the loop (PsychoPy; 0-indexed) |
 
-### Combining conditions
+### Combining Conditions
 
 Use `and` and `or` with parentheses:
 
@@ -612,12 +618,12 @@ Use `and` and `or` with parentheses:
 (condition == 'switch') or (condition == 'repeat')
 ```
 
-### Column name rules
+### Column Name Rules
 
 - Dots in original column names are replaced with underscores on load — use `key_resp_rt`, not `key_resp.rt`.
 - Column names with spaces are also converted to underscores.
 
-### Common mistakes
+### Common Mistakes
 
 | Mistake | Correct form |
 |---|---|
@@ -626,7 +632,7 @@ Use `and` and `or` with parentheses:
 
 ---
 
-## Saving and reusing settings
+## Saving and Reusing Settings
 
 Click **Save Current Configuration** to save your current setup. To reproduce a completed run, use `run_configuration.json` from that run’s timestamped analysis ZIP.
 
@@ -641,7 +647,7 @@ To reload a configuration in a future session:
 
 ---
 
-## Output file structure
+## Output File Structure
 
 The downloaded CSV has this column order:
 
@@ -652,7 +658,7 @@ The downloaded CSV has this column order:
 
 ---
 
-## Frequently asked questions
+## Frequently Asked Questions
 
 **Do I need to add my RT or accuracy columns to Metadata Columns in Results?**
 

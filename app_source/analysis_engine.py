@@ -109,6 +109,40 @@ def analyze_vectorised_steps(ns, df, blocks, group_col, keep_cols, settings, mod
         c = code_of.loc[frame.index].to_numpy()
         return c[c >= 0]
 
+    # Trial funnel: per-block, per-unit counts for the summary shown after a
+    # preview. Purely informational; any failure here only drops the summary.
+    unit_codes = code_of.to_numpy()
+    funnel, funnel_ok = {}, True
+
+    def funnel_block(row):
+        key = int(row['block_num'])
+        if key in funnel:
+            return funnel[key]
+        # Trials a block can use: a unit (participant/file) and, when grouped,
+        # values in every grouping column (conditions skip missing values).
+        gcols = row.get('group_cols')
+        mask = unit_codes >= 0
+        if isinstance(gcols, list) and gcols:
+            mask = mask & df[gcols].notna().all(axis=1).to_numpy()
+        extra = row.get('Extra_Logic')
+        extra = extra.strip() if isinstance(extra, str) else ''
+        zeros = np.zeros(G, dtype=np.int64)
+        entry = {"base": _count(unit_codes[mask], G), "has_filter": bool(extra)}
+        if mode == "RT":
+            entry.update(post=zeros, kept_dv=zeros, final=zeros, outliers=False, exclude_zero=False)
+        else:
+            # Same order as the calculation: no-response trials, then the filter.
+            base_df = df[mask]
+            entry.update(no_response=False, no_resp=zeros, den=zeros)
+            rt_col = row.get('rt_col_for_timeouts')
+            if isinstance(rt_col, str) and rt_col and rt_col in df.columns:
+                missing = pd.to_numeric(base_df[rt_col], errors='coerce').isna()
+                entry.update(no_response=True, no_resp=_count(codes_for(base_df[missing]), G))
+                base_df = base_df[~missing]
+            entry["post"] = _count(codes_for(safe_query(base_df, extra) if extra else base_df), G)
+        funnel[key] = entry
+        return entry
+
     # Per-participant keep-column values.
     keep_vals = {}
     for k in keep_cols:
@@ -232,6 +266,15 @@ def analyze_vectorised_steps(ns, df, blocks, group_col, keep_cols, settings, mod
                 else:
                     agg = pd.Series(n_final, index=range(G))
                 r["agg"] = agg.to_numpy()
+                try:
+                    fb = funnel_block(row)
+                    fb["post"] = fb["post"] + r["post"]
+                    fb["kept_dv"] = fb["kept_dv"] + n_before
+                    fb["final"] = fb["final"] + n_final
+                    fb["outliers"] = fb["outliers"] or bool(do_outlier)
+                    fb["exclude_zero"] = fb["exclude_zero"] or bool(excl_zero)
+                except Exception:
+                    funnel_ok = False
             else:  # Error
                 err_base = df
                 rt_col = row.get('rt_col_for_timeouts', '')
@@ -241,6 +284,11 @@ def analyze_vectorised_steps(ns, df, blocks, group_col, keep_cols, settings, mod
                 num = safe_query(denom, row['Numerator_Logic'])
                 r["den"] = _count(codes_for(denom), G)
                 r["num"] = _count(codes_for(num), G)
+                try:
+                    fb = funnel_block(row)
+                    fb["den"] = fb["den"] + r["den"]
+                except Exception:
+                    funnel_ok = False
         except Exception:
             raise  # wrapper restarts the original calculation, preserving errors
 
@@ -337,4 +385,6 @@ def analyze_vectorised_steps(ns, df, blocks, group_col, keep_cols, settings, mod
         st.warning(f"⚠️ Outlier rejection skipped for {len(skipped_items)} condition(s) due to insufficient data (N < 4).")
         with st.expander("See affected conditions (Participant : Condition)"):
             st.dataframe(pd.DataFrame(skipped_items, columns=["Skipped Conditions"]), hide_index=True)
+    if funnel_ok and funnel:
+        st.session_state[f"_trial_funnel_{mode}"] = {"units": list(pids), "blocks": funnel}
     return pd.DataFrame(results)

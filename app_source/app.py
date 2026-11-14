@@ -1592,6 +1592,7 @@ def analyze_legacy_steps(df, blocks, group_col, keep_cols, settings, mode="RT", 
 # preserves original name disambiguation, partial counts and per-person warnings.
 def analyze_data_blocks_steps(df, blocks, group_col, keep_cols, settings,
                              mode="RT", name_col='file_name'):
+    st.session_state.pop(f"_trial_funnel_{mode}", None)  # set by the whole-frame path only
     try:
         result = yield from analyze_vectorised_steps(
             globals(), df, blocks, group_col, keep_cols, settings, mode, name_col)
@@ -1720,6 +1721,137 @@ def condition_build_issue(block, error):
         return (f"{block} would create {error.args[0]:,} conditions, above the limit of "
                 f"{MAX_CONDITIONS_PER_BLOCK}. Choose categorical grouping columns or narrow the trial filter.")
     return f"{block} could not build its conditions: {type(error).__name__}: {error}"
+
+
+def apply_trial_filter(frame, expression, cache):
+    """Rows a valid trial filter keeps, or None when there is no usable filter.
+
+    Invalid or unsafe filters return None: the analysis reports those itself.
+    `cache` is a dict shared within one rerun, so each block's filter runs once
+    for the summary, the no-trials check and the condition list.
+    """
+    expression = expression.strip()
+    if not expression or not _check_expr_safety(expression):
+        return None
+    if expression not in cache:
+        try:
+            cache[expression] = frame.query(expression, local_dict={}, global_dict={})
+        except Exception:
+            cache[expression] = None
+    return cache[expression]
+
+
+def filter_matches_no_trials(frame, expression, cache):
+    kept = apply_trial_filter(frame, expression, cache)
+    return kept is not None and kept.empty
+
+
+# --- TRIAL SUMMARIES ---
+# "Unit" is one row of the results: a file, or a participant when files are
+# merged by participant ID. Summaries follow the sidebar's grouping setting.
+def analysis_unit(group_col, name_col):
+    return "file" if group_col == name_col else "participant"
+
+
+def unit_name(value):
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    return str(value)
+
+
+def share_range(removed, total, unit, units):
+    """'8.0–61.0% (highest: participant 7)' across units, or None for one unit."""
+    removed, total = np.asarray(removed), np.asarray(total)
+    eligible = np.flatnonzero(total > 0)
+    if len(eligible) < 2:
+        return None
+    shares = removed[eligible] / total[eligible] * 100
+    low, high = shares.min(), shares.max()
+    if np.isclose(low, high):
+        return f"{high:.1f}% for every {unit}"
+    worst = units[eligible[int(np.argmax(shares))]]
+    return f"{low:.1f}–{high:.1f}% (highest: {unit} {unit_name(worst)})"
+
+
+def filter_summary(frame, expression, cache, unit_col, group_cols, unit, rt_col=''):
+    """One line on what a block's trial filter removes, or None.
+
+    Counts the trials the block can use, as the analysis does: rows with a
+    unit and values in every grouping column, after excluding no-response
+    trials for error-rate blocks (rt_col). Removing everything is reported
+    by the no-trials warning instead.
+    """
+    kept = apply_trial_filter(frame, expression, cache)
+    if kept is None:
+        return None
+    columns = [unit_col] + [c for c in group_cols if c != "(None)" and "(None)" not in group_cols]
+    base = frame.dropna(subset=list(dict.fromkeys(columns)))
+    if rt_col and rt_col in base.columns:
+        base = base[pd.to_numeric(base[rt_col], errors='coerce').notna()]
+    if base.empty:
+        return None
+    if base.index.is_unique and kept.index.is_unique:
+        kept_base = base[base.index.isin(kept.index)]
+    else:
+        kept_base = base.query(expression, local_dict={}, global_dict={})
+    total = base.groupby(unit_col).size()
+    removed = total - kept_base.groupby(unit_col).size().reindex(total.index, fill_value=0)
+    n_total, n_removed = int(total.sum()), int(removed.sum())
+    if n_removed == n_total:
+        return None
+    if n_removed == 0:
+        return f"The trial filter keeps all {n_total:,} trials."
+    text = (f"The trial filter removes {n_removed:,} of {n_total:,} trials "
+            f"({n_removed / n_total * 100:.1f}%).")
+    spread = share_range(removed.to_numpy(), total.to_numpy(), unit, list(total.index))
+    if spread:
+        text += f" Removed per {unit}: {spread}."
+    return text
+
+
+def funnel_summary(funnel, mode, unit, show_counts):
+    """Markdown per block: the trials each step removed, after a preview."""
+    units = funnel["units"]
+    kind = "Reaction Time" if mode == "RT" else "Error Rate"
+    texts = []
+    for block, fb in sorted(funnel["blocks"].items()):
+        # (label, removed per unit, trials entering the step per unit, shown when 0)
+        if mode == "RT":
+            dv_label = "missing or zero values" if fb["exclude_zero"] else "missing values"
+            steps = [("trial filter", fb["base"] - fb["post"], fb["base"], fb["has_filter"]),
+                     (dv_label, fb["post"] - fb["kept_dv"], fb["post"], False),
+                     ("outliers", fb["kept_dv"] - fb["final"], fb["kept_dv"], fb["outliers"])]
+            end, end_label = fb["final"], "analysed"
+        else:
+            after_no_resp = fb["base"] - fb["no_resp"]
+            steps = [("no-response trials", fb["no_resp"], fb["base"], fb["no_response"]),
+                     ("trial filter", after_no_resp - fb["post"], after_no_resp, fb["has_filter"]),
+                     ("values outside the denominator", fb["post"] - fb["den"], fb["post"], False)]
+            end, end_label = fb["den"], "in the denominator"
+        chain, spreads = [f"{int(fb['base'].sum()):,} trials"], []
+        for label, removed, entering, always in steps:
+            n_removed, n_entering = int(removed.sum()), int(entering.sum())
+            if not n_removed and not always:
+                continue
+            share = f" ({n_removed / n_entering * 100:.1f}%)" if n_removed and n_entering else ""
+            chain.append(f"{label} −{n_removed:,}{share}")
+            spread = share_range(removed, entering, unit, units) if n_removed else None
+            if spread:
+                spreads.append(f"{label} {spread}")
+        text = f"**{kind} block {block}:** " + " → ".join(chain) + f" → **{int(end.sum()):,} {end_label}**."
+        if spreads:
+            text += f"  \nRemoved per {unit}: " + "; ".join(spreads) + "."
+        texts.append(text)
+    if texts:
+        texts.append("Details per " + unit + " and condition: "
+                     + ("see the count columns in the results." if show_counts else
+                        "tick *Include trial counts and outlier limits* in the sidebar."))
+    return "\n\n".join(texts)
+
+
+def no_trials_issue(block, expression):
+    return (f"The trial filter in {block} ({expression.strip()}) matches no trials, so the block "
+            "has nothing to analyse. Check the column names and values in the filter.")
 
 # --- CONFIG HELPERS ---
 def get_config_dict():
@@ -2426,7 +2558,7 @@ def _render_about(build):
 
     Found a bug? Have a suggestion? [Email Jan](mailto:jan.derrfuss@nottingham.ac.uk)
 
-    #### Source code
+    #### Source Code
 
     Francis is free software (AGPL-3.0).
 
@@ -3165,6 +3297,8 @@ _pipeline = preprocess_cached(df_row_filtered, loop_cols_to_filter, actual_group
                               name_col, st.session_state.get('_last_parsed_sig', id(df_raw)),
                               raw_frame=df_raw)
 df_main_process = _pipeline['frame']
+_trial_filter_cache = {}  # expression -> filtered rows, for this rerun only
+summary_unit = analysis_unit(actual_group_col, name_col)
 preprocessing_report = _pipeline['report']
 data_retention = _pipeline['retention']
 unavailable_preprocessing = _pipeline['unavailable_inputs']
@@ -3704,6 +3838,12 @@ with tab_rt:
                 help="Apply a pandas query filter before calculating the summary measure. Examples: `key_resp_corr == 1` or `trials_thisN >= 4`."
             )
             extra_filt = extra_filt.strip().replace('\n', ' ')
+            if (extra_filt and not preprocessing_issues and group_cols
+                    and all(c in df_main_process.columns for c in group_cols if c != "(None)")):
+                _summary = filter_summary(df_main_process, extra_filt, _trial_filter_cache,
+                                          actual_group_col, group_cols, summary_unit)
+                if _summary:
+                    st.caption(_summary)
             st.markdown('###### Outlier Rejection')
             _rt_out_key = f"rt_out_en_{block_id}"
             if _rt_out_key not in st.session_state:
@@ -3741,7 +3881,7 @@ with tab_rt:
                         outlier_thresh = st.number_input("Percent to Trim (each end)", min_value=1.0, max_value=49.9, step=0.5, key=trim_key)
                     if outlier_scope.startswith("Global"):
                         if extra_filt.strip():
-                            st.info(f"ℹ️ Global bounds will be calculated from trials matching the Additional Filter (`{extra_filt.strip()}`), not from all of the participant's valid trials.")
+                            st.info(f"ℹ️ Global bounds will be calculated from trials matching the Trial Filter (`{extra_filt.strip()}`), not from all of the participant's valid trials.")
                         else:
                             st.info("ℹ️ Global bounds will be calculated from all of the participant's valid trials for this dependent variable.")
 
@@ -3807,6 +3947,10 @@ with tab_rt:
                     issue = f"{block_label} is incomplete. Select {selection}."
                     rt_issues.append(issue)
                     st.warning(issue)
+                elif not preprocessing_issues and filter_matches_no_trials(df_main_process, extra_filt, _trial_filter_cache):
+                    issue = no_trials_issue(block_label, extra_filt)
+                    rt_issues.append(issue)
+                    st.warning(issue)
                 elif not preprocessing_issues:
                     # Build this block's configs atomically: collect into a local
                     # list and commit to the shared list only on success, so a
@@ -3845,12 +3989,8 @@ with tab_rt:
                             # df.query here (the analysis stage guards the same filter via
                             # safe_query). Stay silent on failure — this preview re-runs on every
                             # keystroke, so emitting a warning would spam and risk the tab flash.
-                            filtered_df = df_main_process
-                            if extra_filt.strip() and _check_expr_safety(extra_filt):
-                                try:
-                                    filtered_df = df_main_process.query(extra_filt, local_dict={}, global_dict={})
-                                except Exception:
-                                    filtered_df = df_main_process
+                            _kept = apply_trial_filter(df_main_process, extra_filt, _trial_filter_cache)
+                            filtered_df = df_main_process if _kept is None else _kept
 
                             combs = sort_combs(filtered_df[group_cols].drop_duplicates(), group_cols)
                             nan_mask = combs.isnull().any(axis=1)
@@ -3924,6 +4064,9 @@ with tab_rt:
             glob_settings, mode="RT", name_col=name_col), "cancel_rt_preview", cancel_analysis,
             busy_message="Preparing reaction-time preview…")
         st.dataframe(organize_final_columns(res_df, cols_to_export), width="stretch")
+        _funnel = st.session_state.get("_trial_funnel_RT")
+        if _funnel:
+            st.caption(funnel_summary(_funnel, "RT", summary_unit, glob_settings['show_counts']))
 
 # --- TAB 3: ERROR ANALYSIS ---
 with tab_err:
@@ -3971,7 +4114,7 @@ with tab_err:
                 placeholder="Choose option"
             )
 
-            # === Define Accuracy ===
+            # === Define Ratio ===
             st.markdown('---')
             st.markdown('##### Define Ratio')
             st.markdown(
@@ -4036,6 +4179,12 @@ with tab_err:
                 help="Apply a pandas query filter before calculating the error rate. Examples: `block in [1, 2]` or `trials_thisN >= 4`."
             )
             extra_filt_err = extra_filt_err.strip().replace('\n', ' ')
+            if (extra_filt_err and not preprocessing_issues and groups
+                    and all(c in df_main_process.columns for c in groups if c != "(None)")):
+                _summary = filter_summary(df_main_process, extra_filt_err, _trial_filter_cache,
+                                          actual_group_col, groups, summary_unit, available_rt_col)
+                if _summary:
+                    st.caption(_summary)
 
             # === Output ===
             st.markdown('---')
@@ -4074,6 +4223,11 @@ with tab_err:
                 issue = f"{block_label} is incomplete. Select {selection}."
                 err_issues.append(issue)
                 st.warning(issue)
+            elif (groups and target_col and not preprocessing_issues
+                  and filter_matches_no_trials(df_main_process, extra_filt_err, _trial_filter_cache)):
+                issue = no_trials_issue(block_label, extra_filt_err)
+                err_issues.append(issue)
+                st.warning(issue)
             elif groups and target_col and not preprocessing_issues:
                 # Use the same atomic condition build as the RT tab.
                 block_configs = []
@@ -4093,12 +4247,8 @@ with tab_err:
                         # filter excludes (e.g. cond != 'none') still becomes a
                         # condition and yields an all-NaN output column. Same safety
                         # gate and silent fallback as the RT preview.
-                        filtered_df = df_main_process
-                        if extra_filt_err.strip() and _check_expr_safety(extra_filt_err):
-                            try:
-                                filtered_df = df_main_process.query(extra_filt_err, local_dict={}, global_dict={})
-                            except Exception:
-                                filtered_df = df_main_process
+                        _kept = apply_trial_filter(df_main_process, extra_filt_err, _trial_filter_cache)
+                        filtered_df = df_main_process if _kept is None else _kept
                         combs = sort_combs(filtered_df[groups].drop_duplicates(), groups)
                         # Drop condition combinations with a missing grouping value, as
                         # the RT tab does. Otherwise a `col == nan` query is generated
@@ -4209,6 +4359,9 @@ with tab_err:
             glob_settings, mode="Error", name_col=name_col), "cancel_err_preview", cancel_analysis,
             busy_message="Preparing error-rate preview…")
         st.dataframe(organize_final_columns(res_df, cols_to_export), width="stretch")
+        _funnel = st.session_state.get("_trial_funnel_Error")
+        if _funnel:
+            st.caption(funnel_summary(_funnel, "Error", summary_unit, glob_settings['show_counts']))
 
 # --- DOWNLOAD LOGIC ---
 # Snapshot semantics: clicking "Run Analysis & Prepare Downloads" computes the
