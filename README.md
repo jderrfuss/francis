@@ -24,8 +24,11 @@ At startup, the browser loads the app files from the Francis website (or from
 your own computer, see below). It also downloads a fixed version of the Python
 runtime and packages from jsDelivr and the Python Package Index. Those versions
 are pinned in [`app_source/runtime-manifest.json`](app_source/runtime-manifest.json).
-This version of Francis has been tested in Chromium-based browsers such as
-Chrome. It has not yet been tested in Firefox or Safari.
+This version of Francis has been tested in Chrome, Brave, Safari and Firefox.
+On at least some Macs connected to the University of Nottingham VPN, Firefox
+cannot reach the Francis website. If this happens, use Safari or a
+Chromium-based browser such as Chrome or Brave, or disconnect from the VPN
+while you use Francis.
 
 ## Features
 
