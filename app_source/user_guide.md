@@ -119,7 +119,7 @@ The ZIP archive contains 10 PsychoPy output files — one per participant. One p
 After uploading the ZIP archive, load the example `.json` settings file using **Load Configuration** in the sidebar, then click **Apply Settings**. The configuration sets up the following pipeline:
 
 1. **Data Preprocessing** — an Extreme Value Rejection block discards trials with an RT below 0.15 s or above 2.0 s.
-2. **Reaction Times** — mean correct-trial RT per condition (congruency × distance), with MAD-based outlier rejection (3 MADs), converted to milliseconds.
+2. **Reaction Times** — mean correct-trial RT per condition (congruency × distance), using **Exclude error trials**, with MAD-based outlier rejection (3 MADs), converted to milliseconds.
 3. **Error Rates** — percentage accuracy per condition (congruency × distance).
 
 Click **Run Analysis & Prepare Downloads** to produce the output CSV.

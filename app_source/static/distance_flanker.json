@@ -31,7 +31,8 @@
     "congruency",
     "distance"
   ],
-  "rt_filt_txt_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": "response_corr == 1",
+  "rt_filt_txt_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": "",
+  "rt_excl_err_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": true,
   "rt_inc_col_4fa16a9f-9465-44a8-8589-39e78cc9b7d0": false,
   "err_filt_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": true,
   "err_inc_4bf7fc6d-1b2a-4f42-87d8-7002277231dd": false,
