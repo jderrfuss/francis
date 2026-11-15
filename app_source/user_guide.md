@@ -436,16 +436,19 @@ Choose the column to summarise (typically an RT column). The **Show only RT colu
 
 ### Exclude Trials from Analysis
 
+**Exclude Error Trials**
+Tick this to analyse correct trials only. Francis removes trials whose value in the accuracy column is 0, using the PsychoPy accuracy column that matches the dependent variable (for example `key_resp_corr` for `key_resp_rt`). This is exactly the same as adding `key_resp_corr != 0` to the trial filter. The option is available when the dependent variable ends in `_rt` and a matching `_corr` column exists. It is off by default, and configurations saved before it existed load with it off.
+
 **Trial Filter**
-A pandas query expression applied within each condition, after all global and preprocessing filters. Use this to restrict the analysis to specific trials.
+A pandas query expression applied within each condition, after all global and preprocessing filters. Use this to restrict the analysis to specific trials. If **Exclude Error Trials** is ticked, a trial must pass both.
 
 *Examples:*
-- `key_resp_corr == 1` — include only correct trials (useful for computing correct-trial RT).
+- `key_resp_corr == 1` — include only correct trials (for this common case, you can tick **Exclude Error Trials** instead).
 - `trials_thisN >= 4` — skip the first four trials of the loop (remember that the first trial in the block will be number 0).
 
 See the **Trial Filter — Syntax Reference** section below for full details.
 
-Below the filter, Francis shows how many trials it removes, for example *The trial filter removes 1,448 of 5,760 trials (25.1%). Removed per participant: 8.0–61.0% (highest: participant 7).* The range is given per row of the results: per participant when files are merged by participant ID, otherwise per file. It is left out when there is only one. The counts include only trials the block can use (trials with a value in every grouping column). A filter that removes every trial is reported as a problem, and the analysis will not run until it is fixed.
+Below the filter, Francis shows how many trials it removes, for example *The trial filter removes 1,448 of 5,760 trials (25.1%). Removed per participant: 8.0–61.0% (highest: participant 7).* The range is given per row of the results: per participant when files are merged by participant ID, otherwise per file. It is left out when there is only one. The counts include only trials the block can use (trials with a value in every grouping column). With **Exclude Error Trials** ticked, the summary shows both steps, for example *Excluding error trials removes 412 of 5,760 trials (7.2%). The trial filter then removes 1,036 more (19.4%).* The filter's share is of the trials left after excluding errors. "The trial filter then removes no further trials" means the filter repeats what the checkbox already does. A filter that removes every trial is reported as a problem, and the analysis will not run until it is fixed.
 
 **Outlier Rejection**
 Enable with the **Enable outlier rejection** checkbox. Two settings appear:
@@ -505,7 +508,7 @@ Once you have selected at least one grouping column and a dependent variable, a 
 
 **▶ Preview Results** — runs the RT analysis and displays the results in a table below the blocks. Use this to check your analysis interactively. The full export (combined with Error Rates) is prepared by clicking on the **Run Analysis & Prepare Downloads** button in the sidebar.
 
-Below the table, a summary for each block shows how many trials each step removed, for example *12,000 trials → trial filter −1,448 (12.1%) → missing values −12 (0.1%) → outliers −212 (2.0%) → 10,328 analysed*, followed by the range per participant or file. Each percentage refers to the trials remaining before that step. For the counts per participant and condition, tick **Include trial counts and outlier limits** in the sidebar.
+Below the table, a summary for each block shows how many trials each step removed, for example *12,000 trials → error trials −840 (7.0%) → trial filter −608 (5.4%) → missing values −12 (0.1%) → outliers −212 (2.0%) → 10,328 analysed*, followed by the range per participant or file. Each percentage refers to the trials remaining before that step. For the counts per participant and condition, tick **Include trial counts and outlier limits** in the sidebar.
 
 ---
 

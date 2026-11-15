@@ -126,10 +126,19 @@ def analyze_vectorised_steps(ns, df, blocks, group_col, keep_cols, settings, mod
             mask = mask & df[gcols].notna().all(axis=1).to_numpy()
         extra = row.get('Extra_Logic')
         extra = extra.strip() if isinstance(extra, str) else ''
+        # RT blocks record the user's filter and the error-trial exclusion
+        # separately; Extra_Logic is their combination.
+        text = row.get('Text_Filter')
+        text = text.strip() if isinstance(text, str) else extra
+        errors = row.get('Error_Filter')
+        errors = errors.strip() if isinstance(errors, str) else ''
         zeros = np.zeros(G, dtype=np.int64)
-        entry = {"base": _count(unit_codes[mask], G), "has_filter": bool(extra)}
+        base = _count(unit_codes[mask], G)
+        entry = {"base": base, "has_filter": bool(text)}
         if mode == "RT":
-            entry.update(post=zeros, kept_dv=zeros, final=zeros, outliers=False, exclude_zero=False)
+            entry.update(post=zeros, kept_dv=zeros, final=zeros, outliers=False, exclude_zero=False,
+                         error_step=bool(errors),
+                         after_errors=_count(codes_for(safe_query(df[mask], errors)), G) if errors else base)
         else:
             # Same order as the calculation: no-response trials, then the filter.
             base_df = df[mask]

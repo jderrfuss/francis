@@ -1202,7 +1202,12 @@ def generate_settings_report(settings, rt_configs, err_configs, group_method, pa
             lines.append("")
             # 3. Trial Exclusion
             lines.append("**Trial Exclusion**")
-            filt = first.get('Extra_Logic', '').strip()
+            error_filt = first.get('Error_Filter', '')
+            filt = first.get('Text_Filter', first.get('Extra_Logic', '')).strip()
+            if error_filt:
+                corr = re.fullmatch(r"`(.+)` != 0", error_filt)
+                lines.append(f"- Exclude error trials: Yes (trials where `{corr[1]}` is 0)" if corr
+                             else f"- Exclude error trials: Yes ({error_filt})")
             lines.append(f"- Trial Filter: `{filt}`" if filt else "- Trial Filter: (None)")
             if first.get('enable_outliers'):
                 method = first['outlier_method']
@@ -1210,8 +1215,12 @@ def generate_settings_report(settings, rt_configs, err_configs, group_method, pa
                 scope = first['outlier_scope']
                 thresh_str = f"{thresh}%" if method == "Percentage Trimming" else str(thresh)
                 lines.append(f"- Outlier Rejection: {method} ({thresh_str}), {scope}")
-                if scope.startswith("Global") and filt:
+                if scope.startswith("Global") and filt and error_filt:
+                    lines.append(f"  - *Global bounds restricted to correct trials matching trial filter*")
+                elif scope.startswith("Global") and filt:
                     lines.append(f"  - *Global bounds restricted to trials matching trial filter*")
+                elif scope.startswith("Global") and error_filt:
+                    lines.append(f"  - *Global bounds restricted to correct trials*")
             else:
                 lines.append("- Outlier Rejection: Disabled")
             suffix = first.get('suffix', '').strip()
@@ -1773,16 +1782,21 @@ def share_range(removed, total, unit, units):
     return f"{low:.1f}–{high:.1f}% (highest: {unit} {unit_name(worst)})"
 
 
-def filter_summary(frame, expression, cache, unit_col, group_cols, unit, rt_col=''):
-    """One line on what a block's trial filter removes, or None.
+def filter_summary(frame, expression, cache, unit_col, group_cols, unit, rt_col='', error_expr=''):
+    """One line on what a block's trial selection removes, or None.
 
-    Counts the trials the block can use, as the analysis does: rows with a
-    unit and values in every grouping column, after excluding no-response
-    trials for error-rate blocks (rt_col). Removing everything is reported
-    by the no-trials warning instead.
+    Steps run in order: excluding error trials (error_expr), then the trial
+    filter (expression). Counts the trials the block can use, as the analysis
+    does: rows with a unit and values in every grouping column, after
+    excluding no-response trials for error-rate blocks (rt_col). Removing
+    everything is reported by the no-trials warning instead.
     """
-    kept = apply_trial_filter(frame, expression, cache)
-    if kept is None:
+    error_expr, expression = error_expr.strip(), expression.strip()
+    stages = [(label, expr) for label, expr in (
+        ("error trials", error_expr),
+        ("trial filter", combine_filters(error_expr, expression) if expression else ''),
+    ) if expr]
+    if not stages:
         return None
     columns = [unit_col] + [c for c in group_cols if c != "(None)" and "(None)" not in group_cols]
     base = frame.dropna(subset=list(dict.fromkeys(columns)))
@@ -1790,22 +1804,41 @@ def filter_summary(frame, expression, cache, unit_col, group_cols, unit, rt_col=
         base = base[pd.to_numeric(base[rt_col], errors='coerce').notna()]
     if base.empty:
         return None
-    if base.index.is_unique and kept.index.is_unique:
-        kept_base = base[base.index.isin(kept.index)]
-    else:
-        kept_base = base.query(expression, local_dict={}, global_dict={})
-    total = base.groupby(unit_col).size()
-    removed = total - kept_base.groupby(unit_col).size().reindex(total.index, fill_value=0)
-    n_total, n_removed = int(total.sum()), int(removed.sum())
-    if n_removed == n_total:
+    total = remaining = base.groupby(unit_col).size()
+    steps = []  # (label, removed per unit, trials entering the step per unit)
+    for label, expr in stages:
+        kept = apply_trial_filter(frame, expr, cache)
+        if kept is None:
+            return None
+        if base.index.is_unique and kept.index.is_unique:
+            kept_base = base[base.index.isin(kept.index)]
+        else:
+            kept_base = base.query(expr, local_dict={}, global_dict={})
+        kept_n = kept_base.groupby(unit_col).size().reindex(total.index, fill_value=0)
+        steps.append((label, remaining - kept_n, remaining))
+        remaining = kept_n
+    if int(remaining.sum()) == 0:
         return None
-    if n_removed == 0:
-        return f"The trial filter keeps all {n_total:,} trials."
-    text = (f"The trial filter removes {n_removed:,} of {n_total:,} trials "
-            f"({n_removed / n_total * 100:.1f}%).")
-    spread = share_range(removed.to_numpy(), total.to_numpy(), unit, list(total.index))
-    if spread:
-        text += f" Removed per {unit}: {spread}."
+    units = list(total.index)
+    sentences, spreads = [], []
+    for i, (label, removed, entering) in enumerate(steps):
+        n_removed, n_entering = int(removed.sum()), int(entering.sum())
+        share = f"({n_removed / n_entering * 100:.1f}%)"
+        if label == "error trials":
+            sentences.append(f"Excluding error trials removes {n_removed:,} of {n_entering:,} trials {share}."
+                             if n_removed else f"There are no error trials among the {n_entering:,} trials.")
+        elif i:  # the trial filter after excluding error trials
+            sentences.append(f"The trial filter then removes {n_removed:,} more {share}."
+                             if n_removed else "The trial filter then removes no further trials.")
+        else:
+            sentences.append(f"The trial filter removes {n_removed:,} of {n_entering:,} trials {share}."
+                             if n_removed else f"The trial filter keeps all {n_entering:,} trials.")
+        spread = share_range(removed.to_numpy(), entering.to_numpy(), unit, units) if n_removed else None
+        if spread:
+            spreads.append(f"{label} {spread}" if len(steps) > 1 else spread)
+    text = " ".join(sentences)
+    if spreads:
+        text += f" Removed per {unit}: " + "; ".join(spreads) + "."
     return text
 
 
@@ -1818,7 +1851,9 @@ def funnel_summary(funnel, mode, unit, show_counts):
         # (label, removed per unit, trials entering the step per unit, shown when 0)
         if mode == "RT":
             dv_label = "missing or zero values" if fb["exclude_zero"] else "missing values"
-            steps = [("trial filter", fb["base"] - fb["post"], fb["base"], fb["has_filter"]),
+            after_errors = fb["after_errors"]
+            steps = [("error trials", fb["base"] - after_errors, fb["base"], fb["error_step"]),
+                     ("trial filter", after_errors - fb["post"], after_errors, fb["has_filter"]),
                      (dv_label, fb["post"] - fb["kept_dv"], fb["post"], False),
                      ("outliers", fb["kept_dv"] - fb["final"], fb["kept_dv"], fb["outliers"])]
             end, end_label = fb["final"], "analysed"
@@ -1849,9 +1884,46 @@ def funnel_summary(funnel, mode, unit, show_counts):
     return "\n\n".join(texts)
 
 
-def no_trials_issue(block, expression):
+def no_trials_issue(block, expression, *, errors=False, text=True):
+    if errors and text:
+        return (f"Excluding error trials and the trial filter in {block} together leave no trials, "
+                "so the block has nothing to analyse. Check the column names and values in the filter.")
+    if errors:
+        return (f"Excluding error trials in {block} leaves no trials, so the block has nothing to "
+                "analyse. Check that the accuracy column codes correct trials as 1.")
     return (f"The trial filter in {block} ({expression.strip()}) matches no trials, so the block "
             "has nothing to analyse. Check the column names and values in the filter.")
+
+
+def matching_corr_col(dv_col, columns):
+    """The PsychoPy accuracy column paired with an RT column, or '' if absent.
+
+    key_resp_rt -> key_resp_corr (and key_resp.rt -> key_resp.corr), the
+    reverse of derive_rt_col.
+    """
+    for rt_suffix, corr_suffix in (('_rt', '_corr'), ('.rt', '.corr')):
+        if dv_col and dv_col.endswith(rt_suffix):
+            candidate = dv_col[:-len(rt_suffix)] + corr_suffix
+            return candidate if candidate in columns else ''
+    return ''
+
+
+def error_trial_filter(corr_col):
+    """Filter equivalent to 'Exclude error trials': keeps trials not coded 0."""
+    return f"`{corr_col}` != 0"
+
+
+def combine_filters(*expressions):
+    parts = [e.strip() for e in expressions if e and e.strip()]
+    if len(parts) < 2:
+        return parts[0] if parts else ''
+    return " and ".join(f"({p})" for p in parts)
+
+
+def subsection_divider():
+    """Thin dashed line between the parts of a section (solid lines separate sections)."""
+    st.markdown('<hr style="border:none;border-top:1px dashed rgba(128,128,128,0.45);'
+                'margin:0.75rem 0 0.5rem 0;">', unsafe_allow_html=True)
 
 # --- CONFIG HELPERS ---
 def get_config_dict():
@@ -1865,7 +1937,7 @@ def get_config_dict():
         'rt_blocks': (
             'rt_grp', 'rt_inc_col', 'rt_filt', 'rt_dv', 'rt_filt_txt', 'rt_out_en',
             'rt_out_sc', 'rt_out_mt', 'rt_out_th', 'rt_out_trim', 'rt_suf', 'rt_meas',
-            'rt_excl_zero', 'rt_ms', 'rt_min_tr',
+            'rt_excl_zero', 'rt_ms', 'rt_min_tr', 'rt_excl_err',
         ),
         'err_blocks': (
             'err_grp', 'err_inc', 'err_filt', 'err_col', 'err_num', 'err_den',
@@ -3823,13 +3895,34 @@ with tab_rt:
             st.markdown('##### Exclude Trials from Analysis')
             st.markdown(
                 '<p style="font-size:0.875rem;color:#333;max-width:680px;margin:0 0 0.4rem 0;">'
-                'Use trial filter and outlier rejection to remove specific trials from the analysis. '
-                'The trial filter will always run before the outlier rejection. '
+                'Use “Exclude error trials”, the trial filter and outlier rejection to remove specific '
+                'trials from the analysis. Error trials and the trial filter are always removed before '
+                'outlier rejection runs. '
                 'Use “Condition Name Suffix” to add a short label to the output column names '
                 '(e.g. <code>_no_error_trials</code>).</p>',
                 unsafe_allow_html=True
             )
+            subsection_divider()
             st.markdown('###### Trial Filter')
+            rt_corr_col = matching_corr_col(dv_col, all_cols)
+            _rt_err_key = f"rt_excl_err_{block_id}"
+            if _rt_err_key not in st.session_state:
+                st.session_state[_rt_err_key] = False
+            exclude_errors = st.checkbox(
+                "Exclude error trials", key=_rt_err_key,
+                # A ticked box stays editable (e.g. from a loaded configuration)
+                # so it can be unticked when no accuracy column matches.
+                disabled=not rt_corr_col and not st.session_state[_rt_err_key],
+                help="Removes trials whose accuracy value is 0, using the PsychoPy accuracy column that "
+                     "matches the dependent variable (e.g. `key_resp_corr` for `key_resp_rt`). "
+                     "Equivalent to adding `key_resp_corr != 0` to the trial filter."
+            )
+            if rt_corr_col:
+                st.caption(f"Removes trials where `{rt_corr_col}` is 0.")
+            elif not exclude_errors:
+                st.caption("Available when the dependent variable ends in `_rt` and a matching `_corr` "
+                           "column exists (e.g. `key_resp_rt` and `key_resp_corr`).")
+            error_filt = error_trial_filter(rt_corr_col) if exclude_errors and rt_corr_col else ''
             extra_filt = st.text_area(
                 "Use Pandas query syntax to filter trials",
                 key=f"rt_filt_txt_{block_id}",
@@ -3838,12 +3931,16 @@ with tab_rt:
                 help="Apply a pandas query filter before calculating the summary measure. Examples: `key_resp_corr == 1` or `trials_thisN >= 4`."
             )
             extra_filt = extra_filt.strip().replace('\n', ' ')
-            if (extra_filt and not preprocessing_issues and group_cols
+            # What the analysis applies: identical to typing the error filter into the box.
+            block_filt = combine_filters(error_filt, extra_filt)
+            if (block_filt and not preprocessing_issues and group_cols
                     and all(c in df_main_process.columns for c in group_cols if c != "(None)")):
                 _summary = filter_summary(df_main_process, extra_filt, _trial_filter_cache,
-                                          actual_group_col, group_cols, summary_unit)
+                                          actual_group_col, group_cols, summary_unit,
+                                          error_expr=error_filt)
                 if _summary:
                     st.caption(_summary)
+            subsection_divider()
             st.markdown('###### Outlier Rejection')
             _rt_out_key = f"rt_out_en_{block_id}"
             if _rt_out_key not in st.session_state:
@@ -3880,11 +3977,16 @@ with tab_rt:
                             st.session_state[trim_key] = 20.0
                         outlier_thresh = st.number_input("Percent to Trim (each end)", min_value=1.0, max_value=49.9, step=0.5, key=trim_key)
                     if outlier_scope.startswith("Global"):
-                        if extra_filt.strip():
-                            st.info(f"ℹ️ Global bounds will be calculated from trials matching the Trial Filter (`{extra_filt.strip()}`), not from all of the participant's valid trials.")
+                        if extra_filt and error_filt:
+                            st.info(f"ℹ️ Global bounds will be calculated from correct trials matching the Trial Filter (`{extra_filt}`), not from all of the participant's valid trials.")
+                        elif extra_filt:
+                            st.info(f"ℹ️ Global bounds will be calculated from trials matching the Trial Filter (`{extra_filt}`), not from all of the participant's valid trials.")
+                        elif error_filt:
+                            st.info("ℹ️ Global bounds will be calculated from the participant's correct trials, not from all of their valid trials.")
                         else:
                             st.info("ℹ️ Global bounds will be calculated from all of the participant's valid trials for this dependent variable.")
 
+            subsection_divider()
             st.markdown('###### Condition Name Suffix')
             suffix_val = st.text_input(
                 "Append a short label to all output column names for this analysis block (e.g. `_no_errors`).",
@@ -3947,8 +4049,13 @@ with tab_rt:
                     issue = f"{block_label} is incomplete. Select {selection}."
                     rt_issues.append(issue)
                     st.warning(issue)
-                elif not preprocessing_issues and filter_matches_no_trials(df_main_process, extra_filt, _trial_filter_cache):
-                    issue = no_trials_issue(block_label, extra_filt)
+                elif exclude_errors and not rt_corr_col:
+                    issue = (f"{block_label} has Exclude error trials ticked, but there is no accuracy "
+                             f"column matching `{dv_col}`. Untick it or choose another dependent variable.")
+                    rt_issues.append(issue)
+                    st.warning(issue)
+                elif not preprocessing_issues and filter_matches_no_trials(df_main_process, block_filt, _trial_filter_cache):
+                    issue = no_trials_issue(block_label, block_filt, errors=bool(error_filt), text=bool(extra_filt))
                     rt_issues.append(issue)
                     st.warning(issue)
                 elif not preprocessing_issues:
@@ -3974,9 +4081,10 @@ with tab_rt:
                                 rt_name_tracker[base_name] = 1
                             block_configs.append({
                                 "Condition_Name": final_name,
-                                "Filter_Logic": extra_filt,
+                                "Filter_Logic": block_filt,
                                 "Dependent_Var": dv_col, "Measure": measure,
-                                "Factor_Logic": "", "Extra_Logic": extra_filt,
+                                "Factor_Logic": "", "Extra_Logic": block_filt,
+                                "Text_Filter": extra_filt, "Error_Filter": error_filt,
                                 "convert_to_ms": convert_ms, "exclude_zero_dv": exclude_zero_dv,
                                 "enable_outliers": do_outlier,
                                 "outlier_scope": outlier_scope, "outlier_method": outlier_method, "outlier_thresh": outlier_thresh,
@@ -3989,7 +4097,7 @@ with tab_rt:
                             # df.query here (the analysis stage guards the same filter via
                             # safe_query). Stay silent on failure — this preview re-runs on every
                             # keystroke, so emitting a warning would spam and risk the tab flash.
-                            _kept = apply_trial_filter(df_main_process, extra_filt, _trial_filter_cache)
+                            _kept = apply_trial_filter(df_main_process, block_filt, _trial_filter_cache)
                             filtered_df = df_main_process if _kept is None else _kept
 
                             combs = sort_combs(filtered_df[group_cols].drop_duplicates(), group_cols)
@@ -4020,11 +4128,12 @@ with tab_rt:
                                 # column named 2back) and escape the value properly.
                                 parts = [f"`{col}` == {fmt_query_value(row[col])}" for col in group_cols]
                                 base_logic = " and ".join(parts)
-                                final_logic = f"({base_logic}) and ({extra_filt})" if extra_filt.strip() else base_logic
+                                final_logic = f"({base_logic}) and ({block_filt})" if block_filt else base_logic
                                 block_configs.append({
                                     "Condition_Name": final_name, "Filter_Logic": final_logic,
                                     "Dependent_Var": dv_col, "Measure": measure,
-                                    "Factor_Logic": base_logic, "Extra_Logic": extra_filt,
+                                    "Factor_Logic": base_logic, "Extra_Logic": block_filt,
+                                    "Text_Filter": extra_filt, "Error_Filter": error_filt,
                                     "convert_to_ms": convert_ms, "exclude_zero_dv": exclude_zero_dv,
                                     "enable_outliers": do_outlier,
                                     "outlier_scope": outlier_scope, "outlier_method": outlier_method, "outlier_thresh": outlier_thresh,
