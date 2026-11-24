@@ -56,7 +56,7 @@ import time  # stlite: timings for the diagnostics panel
 import asyncio  # stlite: cooperative progress / cancellation
 import gc  # stlite: release obsolete datasets before another upload
 import copy  # stlite: preserve setup while a replacement decision is pending
-from analysis_engine import analyze_vectorised_steps  # stlite: fast analysis
+from analysis_engine import NO_DV, analyze_vectorised_steps  # stlite: fast analysis
 
 # stlite: shallow frames isolate writes without eagerly copying every column.
 pd.options.mode.copy_on_write = True
@@ -1198,7 +1198,9 @@ def generate_settings_report(settings, rt_configs, err_configs, group_method, pa
             _append_conditions(first.get('group_cols', []), block_cfgs)
             lines.append("")
             # 2. Dependent Variable
-            lines.append(f"**Dependent Variable:** `{first['Dependent_Var']}`")
+            lines.append("**Dependent Variable:** (None) – counts the trials in each condition"
+                         if first['Dependent_Var'] == NO_DV
+                         else f"**Dependent Variable:** `{first['Dependent_Var']}`")
             lines.append("")
             # 3. Trial Exclusion
             lines.append("**Trial Exclusion**")
@@ -1233,7 +1235,9 @@ def generate_settings_report(settings, rt_configs, err_configs, group_method, pa
                 lines.append(f"- Trials with DV = 0 excluded: {'Yes' if first.get('exclude_zero_dv', True) else 'No'}")
             lines.append("")
             # 5. Min Trials
-            lines.append(f"**Minimum Trials per Condition:** {first.get('min_trials', 1)}")
+            lines.append("**Minimum Trials per Condition:** Not used for Count (no trials = 0)"
+                         if first['Measure'] == "Count"
+                         else f"**Minimum Trials per Condition:** {first.get('min_trials', 1)}")
             lines.append("")
             _append_output_cols(block_cfgs)
 
@@ -1377,16 +1381,39 @@ def apply_conditional_column(df, cfg, warn=None):  # stlite
 # ==========================================
 # 2. ANALYSIS ENGINE (REUSABLE)
 # ==========================================
+_MISSING_TEXT = ('', 'none', 'nan')
+
+
+def dv_present(values):
+    """Count's valid trials: any value that isn't missing, number or text.
+    Blank cells and PsychoPy's 'None' count as missing even when they reach
+    this point as text rather than NaN (e.g. from a recoded column)."""
+    text = values.astype(str).str.strip().str.lower()
+    return values.notna() & ~text.isin(_MISSING_TEXT)
+
+
+def dv_kind(values):
+    """'numeric' if every present value is a number (also for an all-empty
+    column), 'none' if none is, 'mixed' otherwise."""
+    numeric = pd.to_numeric(values[dv_present(values)], errors='coerce').notna()
+    return 'numeric' if numeric.all() else 'none' if not numeric.any() else 'mixed'
+
+
 def analyze_legacy_steps(df, blocks, group_col, keep_cols, settings, mode="RT", name_col='file_name'):  # stlite: original semantics
     if not blocks: return pd.DataFrame()
 
     results = []
     final_configs = []
     exec_name_tracker = {}
-    
+
     # Store skipped items as strings for detailed reporting
     skipped_items = []
-    
+    # DV columns are classified once on the whole data, so every participant
+    # is treated alike. Notes are collected here and shown once at the end.
+    dv_kinds = {}
+    no_numeric_notes = {}    # (column, measure) -> condition names
+    text_outlier_notes = {}  # column -> condition names
+
     for row in blocks:
         row = dict(row)  # copy so we don't mutate the caller's list
         base = row['Condition_Name']
@@ -1433,9 +1460,10 @@ def analyze_legacy_steps(df, blocks, group_col, keep_cols, settings, mode="RT", 
             c_name = row['Condition_Name']
             if mode == "RT":
                 c_dv = row['Dependent_Var']
-                c_meas = row['Measure']
-                
-                do_outlier = row.get('enable_outliers', False)
+                no_dv = c_dv == NO_DV
+                c_meas = "Count" if no_dv else row['Measure']
+
+                do_outlier = row.get('enable_outliers', False) and not no_dv
                 o_scope = row.get('outlier_scope', 'Per Condition')
                 o_method = row.get('outlier_method', 'Standard Deviation (SD)')
                 o_thresh = row.get('outlier_thresh', 2.5)
@@ -1457,19 +1485,36 @@ def analyze_legacy_steps(df, blocks, group_col, keep_cols, settings, mode="RT", 
                             except Exception: pass
                         row_res[f"{c_name}_trls_post_filter"] = n_post_filter
 
-                    cond_data[c_dv] = pd.to_numeric(cond_data[c_dv], errors='coerce')
-                    # NaN DVs (no response / non-numeric) are never valid
-                    # observations, for any measure: Sum skips them anyway,
-                    # Count is documented as "valid trials", and leaving them
-                    # in let the outlier mask drop them and miscount them as
-                    # outliers for Sum/Count. Zeros are excluded only when the
-                    # block asks for it, and only for Mean/Median (raw RTs:
-                    # 0 is a recording artifact; difference / log DVs: 0 is
-                    # real data). Negative values are always kept — log RTs
-                    # and difference scores are legitimately negative.
-                    cond_data = cond_data[cond_data[c_dv].notna()]
-                    if c_meas in ["Mean", "Median"] and row.get('exclude_zero_dv', True):
-                        cond_data = cond_data[cond_data[c_dv] != 0]
+                    # Count only needs to know a trial has a value, so a DV
+                    # holding text (choices like "a"/"b", key names) is
+                    # counted as it is. Fully numeric DVs keep the numeric
+                    # route below, so outlier rejection still works for them.
+                    # With no DV, every trial in the condition counts.
+                    count_text = False
+                    if not no_dv:
+                        if c_dv not in dv_kinds:
+                            dv_kinds[c_dv] = dv_kind(df[c_dv])
+                        count_text = c_meas == "Count" and dv_kinds[c_dv] != 'numeric'
+                    if count_text:
+                        cond_data = cond_data[dv_present(cond_data[c_dv])]
+                    elif not no_dv:
+                        if dv_kinds[c_dv] == 'none':
+                            names = no_numeric_notes.setdefault((c_dv, c_meas), [])
+                            if c_name not in names:
+                                names.append(c_name)
+                        cond_data[c_dv] = pd.to_numeric(cond_data[c_dv], errors='coerce')
+                        # NaN DVs (no response / non-numeric) are never valid
+                        # observations, for any measure: Sum skips them anyway,
+                        # Count is documented as "valid trials", and leaving them
+                        # in let the outlier mask drop them and miscount them as
+                        # outliers for Sum/Count. Zeros are excluded only when the
+                        # block asks for it, and only for Mean/Median (raw RTs:
+                        # 0 is a recording artifact; difference / log DVs: 0 is
+                        # real data). Negative values are always kept — log RTs
+                        # and difference scores are legitimately negative.
+                        cond_data = cond_data[cond_data[c_dv].notna()]
+                        if c_meas in ["Mean", "Median"] and row.get('exclude_zero_dv', True):
+                            cond_data = cond_data[cond_data[c_dv] != 0]
                     n_before = len(cond_data)
                     # Trials dropped between post_filter and here (missing DV
                     # always; zero DV for Mean/Median when enabled) had no count
@@ -1481,8 +1526,17 @@ def analyze_legacy_steps(df, blocks, group_col, keep_cols, settings, mode="RT", 
                     
                     # --- OUTLIER REJECTION ---
                     L_disp, U_disp = np.nan, np.nan
-                    
-                    if do_outlier:
+
+                    if do_outlier and count_text:
+                        # Text has no SD/MAD: count every trial, report the
+                        # bounds as empty (as for a skipped N < 4 condition).
+                        names = text_outlier_notes.setdefault(c_dv, [])
+                        if c_name not in names:
+                            names.append(c_name)
+                        if settings['show_counts']:
+                            row_res[f"{c_name}_lower"] = np.nan
+                            row_res[f"{c_name}_upper"] = np.nan
+                    elif do_outlier:
                         if o_scope.startswith("Global"):
                             base_df = valid_df.copy(deep=False)  # stlite
                             if o_base_logic.strip():
@@ -1538,7 +1592,9 @@ def analyze_legacy_steps(df, blocks, group_col, keep_cols, settings, mode="RT", 
                     n_final = len(cond_data)
                     if settings['show_counts']: row_res[f"{c_name}_trls_final"] = n_final
                     block_min = row.get('min_trials', 1)
-                    if n_final < block_min:
+                    # A count of 0 is a result, not too little data: the
+                    # minimum applies to Mean, Median and Sum only.
+                    if c_meas != "Count" and n_final < block_min:
                         val = np.nan
                     else:
                         if c_meas == "Mean": val = cond_data[c_dv].mean()
@@ -1594,7 +1650,16 @@ def analyze_legacy_steps(df, blocks, group_col, keep_cols, settings, mode="RT", 
         st.warning(f"⚠️ Outlier rejection skipped for {len(skipped_items)} condition(s) due to insufficient data (N < 4).")
         with st.expander("See affected conditions (Participant : Condition)"):
             st.dataframe(pd.DataFrame(skipped_items, columns=["Skipped Conditions"]), hide_index=True)
-        
+    for (col, meas), names in no_numeric_notes.items():
+        st.warning(
+            f"⚠️ Column `{col}` has no numeric values, so its {meas.lower()} can't be "
+            f"calculated and is left empty ({', '.join(names)}). To count trials, "
+            f"choose Count as the summary measure; otherwise select a numeric column.")
+    for col, names in text_outlier_notes.items():
+        st.info(
+            f"ℹ️ Outlier rejection was skipped for {', '.join(names)}: column `{col}` "
+            f"contains text, so all trials with a value were counted.")
+
     return pd.DataFrame(results)
 
 # stlite: restart the entire RT/Error call on any speculative error. This
@@ -1718,7 +1783,8 @@ def missing_analysis_columns(groups, target, available):
         return []
     # Selecting (None) requests one analysis across all data.
     factors = [] if "(None)" in groups else groups
-    return missing_selected_columns([target, *factors], available)
+    targets = [] if target == NO_DV else [target]
+    return missing_selected_columns([*targets, *factors], available)
 
 
 def unavailable_column_message(block, missing):
@@ -3887,8 +3953,15 @@ with tab_rt:
             dv_opts = rt_candidates if (filter_dv and rt_candidates) else all_cols
             dv_key = f"rt_dv_{block_id}"
             dv_col = st.selectbox("Select column with the dependent variable",
-                                  retain_column_options(dv_key, dv_opts), key=dv_key,
-                                  index=None, placeholder="Choose option")
+                                  retain_column_options(dv_key, [NO_DV, *dv_opts]), key=dv_key,
+                                  index=None, placeholder="Choose option",
+                                  help="Select '(None)' to count the trials in each condition. "
+                                       "To count how often each value of a column occurs (e.g. "
+                                       "each response option), select that column under Define "
+                                       "Conditions.")
+            no_dv = dv_col == NO_DV
+            if no_dv:
+                st.caption("Counts the trials in each condition. The summary measure is Count.")
 
             # === Exclude Trials from Analysis ===
             st.markdown('---')
@@ -3945,7 +4018,10 @@ with tab_rt:
             _rt_out_key = f"rt_out_en_{block_id}"
             if _rt_out_key not in st.session_state:
                 st.session_state[_rt_out_key] = False
-            do_outlier = st.checkbox("Enable outlier rejection", key=_rt_out_key)
+            do_outlier = st.checkbox("Enable outlier rejection", key=_rt_out_key,
+                                     disabled=no_dv) and not no_dv
+            if no_dv:
+                st.caption("Needs a dependent variable.")
             outlier_scope, outlier_method, outlier_thresh = "Per Condition", "Standard Deviation (SD)", 2.5
 
             if do_outlier:
@@ -3998,10 +4074,14 @@ with tab_rt:
             st.markdown('---')
             st.markdown('##### Summary Measure')
             meas_key = f"rt_meas_{block_id}"
+            if no_dv:
+                st.session_state[meas_key] = "Count"
             measure = st.selectbox(
                 "What summary measure should be computed on the values in the DV?",
                 ["Mean", "Median", "Sum", "Count"],
-                key=meas_key
+                key=meas_key, disabled=no_dv,
+                help="Count gives the number of trials in each condition that have a value in the "
+                     "DV (numbers or text). With the DV set to '(None)', every trial counts."
             )
             if measure in ("Mean", "Median"):
                 _rt_z_key = f"rt_excl_zero_{block_id}"
@@ -4029,9 +4109,11 @@ with tab_rt:
             block_min_trials_rt = st.number_input(
                 "Minimum trials per condition",
                 min_value=1,
-                key=rt_min_tr_key,
-                help="If the number of valid trials (after filtering and outlier rejection) in a condition falls below this value, the result is set to NaN."
+                key=rt_min_tr_key, disabled=measure == "Count",
+                help="If the number of valid trials (after filtering and outlier rejection) in a condition falls below this value, the result is set to NaN. Not used for Count."
             )
+            if measure == "Count":
+                st.caption("Not used for Count: a condition without trials is reported as 0.")
 
             if len(st.session_state.rt_blocks) > 1:
                 st.button("🗑️ Delete Block", key=f"rt_del_{block_id}", on_click=remove_rt_block, args=(block_id,), type="secondary")
@@ -4051,7 +4133,12 @@ with tab_rt:
                     st.warning(issue)
                 elif exclude_errors and not rt_corr_col:
                     issue = (f"{block_label} has Exclude error trials ticked, but there is no accuracy "
-                             f"column matching `{dv_col}`. Untick it or choose another dependent variable.")
+                             f"column matching `{dv_col}`. Untick it or choose another dependent variable."
+                             if not no_dv else
+                             f"{block_label} has Exclude error trials ticked, but with the dependent "
+                             f"variable set to (None) there is no matching accuracy column. Untick it "
+                             f"and add the accuracy condition to the trial filter instead "
+                             f"(e.g. `key_resp_corr == 1`).")
                     rt_issues.append(issue)
                     st.warning(issue)
                 elif not preprocessing_issues and filter_matches_no_trials(df_main_process, block_filt, _trial_filter_cache):
@@ -4067,11 +4154,12 @@ with tab_rt:
                     block_configs = []
                     _tracker_backup = dict(rt_name_tracker)
                     try:
-                        clean_dv = clean_col_name(dv_col)
+                        # No DV: names end in just "_count" (e.g. "a_count").
+                        dv_part = [] if no_dv else [clean_col_name(dv_col)]
                         nan_cols_to_show = []
 
                         if "(None)" in group_cols:
-                            base_name = f"{clean_dv}_{measure.lower()}"
+                            base_name = '_'.join([*dv_part, measure.lower()])
                             if suffix_val:
                                 base_name += suffix_val
                             final_name = f"{base_name}_{rt_name_tracker.get(base_name, 0) + 1}" if base_name in rt_name_tracker else base_name
@@ -4115,7 +4203,7 @@ with tab_rt:
 
                             for _, row in combs.iterrows():
                                 name_parts = [format_col_val_label(c, row[c]) if include_col_names else format_val_for_name(row[c]) for c in group_cols]
-                                base_name = f"{'_'.join(name_parts)}_{clean_dv}_{measure.lower()}"
+                                base_name = '_'.join([*name_parts, *dv_part, measure.lower()])
                                 if suffix_val:
                                     base_name += suffix_val
                                 final_name = f"{base_name}_{rt_name_tracker.get(base_name, 0) + 1}" if base_name in rt_name_tracker else base_name

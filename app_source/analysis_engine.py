@@ -9,6 +9,9 @@ import numpy as np
 import pandas as pd
 
 QUIET_ERRORS = (pd.errors.UndefinedVariableError, ValueError, SyntaxError)
+# Dependent variable "(None)": Count the trials in each condition, whatever
+# their values. Only Count is offered for it.
+NO_DV = "(None)"
 
 def _bounds(v, codes, method, thresh):
     """Lower/upper bounds per group, mirroring app.py's calculate_*_bounds."""
@@ -182,11 +185,14 @@ def analyze_vectorised_steps(ns, df, blocks, group_col, keep_cols, settings, mod
         try:
             if mode == "RT":
                 c_dv, c_meas = row['Dependent_Var'], row['Measure']
+                no_dv = c_dv == NO_DV
+                if no_dv:
+                    c_meas = "Count"
                 # Per-group to_numeric can infer different types for text DVs.
                 # The original path preserves those coercion/precision rules.
-                if not pd.api.types.is_numeric_dtype(df[c_dv].dtype):
+                elif not pd.api.types.is_numeric_dtype(df[c_dv].dtype):
                     raise ValueError("Dependent variable requires per-participant coercion")
-                do_outlier = row.get('enable_outliers', False)
+                do_outlier = bool(row.get('enable_outliers', False)) and not no_dv
                 o_scope = row.get('outlier_scope', 'Per Condition')
                 o_method = row.get('outlier_method', 'Standard Deviation (SD)')
                 o_thresh = row.get('outlier_thresh', 2.5)
@@ -209,7 +215,9 @@ def analyze_vectorised_steps(ns, df, blocks, group_col, keep_cols, settings, mod
                     elif row.get('Factor_Logic'):
                         r["pre"] = _count(codes_for(safe_query(df, row['Factor_Logic'])), G)
                 r["stage"] = 1
-                v = pd.to_numeric(cond[c_dv], errors='coerce')
+                # No DV: every trial in the condition counts.
+                v = (pd.Series(1.0, index=cond.index) if no_dv
+                     else pd.to_numeric(cond[c_dv], errors='coerce'))
                 keep = v.notna()
                 if excl_zero:
                     keep &= v != 0
@@ -363,10 +371,12 @@ def analyze_vectorised_steps(ns, df, blocks, group_col, keep_cols, settings, mod
                 if settings['show_counts']:
                     row_res[f"{c_name}_trls_final"] = n_final
                 try:
-                    if n_final < row.get('min_trials', 1):
+                    c_meas = "Count" if row['Dependent_Var'] == NO_DV else row['Measure']
+                    # A count of 0 is a result, not too little data: the
+                    # minimum applies to Mean, Median and Sum only.
+                    if c_meas != "Count" and n_final < row.get('min_trials', 1):
                         val = np.nan
                     else:
-                        c_meas = row['Measure']
                         val = n_final if c_meas not in ("Mean", "Median", "Sum") else r["agg"][i]
                         if row.get('convert_to_ms', False) and c_meas in ["Mean", "Median"]:
                             val *= 1000

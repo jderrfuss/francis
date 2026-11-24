@@ -432,12 +432,14 @@ When condition values are numbers, they can be hard to identify in the output. T
 
 Choose the column to summarise (typically an RT column). The **Show only RT columns** toggle shortens the list to columns ending in `_rt` or `.rt`. Uncheck it to see all columns.
 
+Select `(None)` to count the trials in each condition without summarising any column. The summary measure is then fixed to Count, and outlier rejection and **Exclude Error Trials** are unavailable because both need a dependent variable. See [Counting Responses and Other Values](#counting-responses-and-other-values).
+
 ---
 
 ### Exclude Trials from Analysis
 
 **Exclude Error Trials**
-Tick this to analyse correct trials only. Francis removes trials whose value in the accuracy column is 0, using the PsychoPy accuracy column that matches the dependent variable (for example `key_resp_corr` for `key_resp_rt`). This is exactly the same as adding `key_resp_corr != 0` to the trial filter. The option is available when the dependent variable ends in `_rt` and a matching `_corr` column exists. It is off by default, and configurations saved before it existed load with it off.
+Tick this to analyse correct trials only. Francis removes trials whose value in the accuracy column is 0, using the PsychoPy accuracy column that matches the dependent variable (for example `key_resp_corr` for `key_resp_rt`). This is exactly the same as adding `key_resp_corr != 0` to the trial filter. The option is available when the dependent variable ends in `_rt` and a matching `_corr` column exists, so not with the dependent variable set to `(None)`; use the trial filter there instead (e.g. `key_resp_corr == 1`). It is off by default, and configurations saved before it existed load with it off.
 
 **Trial Filter**
 A pandas query expression applied within each condition, after all global and preprocessing filters. Use this to restrict the analysis to specific trials. If **Exclude Error Trials** is ticked, a trial must pass both.
@@ -485,7 +487,9 @@ An optional short label appended to every output column name for this block. Use
 | Mean | Arithmetic mean. Trials with `NaN` are excluded; trials with a value of 0 are excluded by default (see below). |
 | Median | Median. Trials with `NaN` are excluded; trials with a value of 0 are excluded by default (see below). |
 | Sum | Sum of all values. **Includes zeros** — valid for cumulative scores or questionnaire totals where 0 is a meaningful response. |
-| Count | Number of valid trials remaining after all filtering. Trials with `NaN` in the DV do not count. |
+| Count | Number of trials remaining after all filtering that have a value in the DV. The DV may hold numbers or text (e.g. choices `a`/`b` or key names); trials with an empty DV, `NaN` or `None` do not count. With the DV set to `(None)`, every trial counts. A condition without trials is reported as 0. Outlier rejection needs numbers, so it is skipped for a DV that contains text. |
+
+> Mean, Median, and Sum need numbers. If the DV column has no numeric values at all, Francis leaves these results empty and says so above the results table.
 
 > Negative values are always included, for all measures. Log-transformed RTs and difference scores are legitimately negative, so they enter the summary like any other value.
 
@@ -498,7 +502,27 @@ Ticked by default. For raw RT columns, an RT of 0 is physically impossible and u
 If your RT column is in seconds (PsychoPy's default), tick this to convert the final mean or median to milliseconds. Francis computes the summary in seconds, multiplies it by 1,000, then rounds once to the nearest millisecond. Exact halfway values round to the even integer. For example, 450.5 ms rounds to 450 ms and 451.5 ms rounds to 452 ms. Reported outlier bounds are also converted to milliseconds.
 
 **Minimum trials per condition**
-If the number of valid trials in a condition — after all filtering and outlier rejection — falls below this value, the result is set to `NaN` rather than computing a potentially unreliable summary. Default is 1 (no minimum enforced).
+If the number of valid trials in a condition — after all filtering and outlier rejection — falls below this value, the result is set to `NaN` rather than computing a potentially unreliable summary. Default is 1 (no minimum enforced). Not used for Count, where the number of trials is the result itself: a condition without trials is reported as 0.
+
+---
+
+### Counting Responses and Other Values
+
+To count how often each value of a column occurs, for example how often each participant chose each of eight response options, one block is enough:
+
+1. Under **Define Conditions**, select the column whose values you want to count (e.g. `choice`).
+2. Under **Select Dependent Variable**, select `(None)`.
+3. Click **▶ Preview Results**.
+
+Francis produces one column per value found in the data, for example `a_count`, `b_count`, … `h_count`, or `choiceA_count` and so on with **Include column names in output** ticked. A participant who never chose an option gets 0 for it. Values can be numbers or text.
+
+*Variations:*
+
+- **Count per block or condition:** select a second column under Define Conditions, e.g. `block` and `choice` for one count per block and option.
+- **Count only some trials:** use the trial filter, e.g. `key_resp_corr == 1` to count correct trials only, or `key_resp_rt <= 2` to count responses given within 2 seconds.
+- **Count only trials with a value in a column:** instead of `(None)`, select that column as the dependent variable. For example, with `key_resp_rt` as the dependent variable, trials without a response (an empty RT) are not counted.
+
+*Proportions instead of counts:* if `choice` is the only condition column, divide each count by the participant's number of trials. Tick **Include trial counts and outlier limits** in the sidebar to add this number (`trls_valid_global`) to the results. For the proportion of one or two specific options, the Error Rates tab computes it directly: set the target column to `choice`, the numerator to the option (e.g. `a`), and the denominator to all options (e.g. `a, b, c, d, e, f, g, h`). That tab needs one block per option, so for many options counting them here is quicker.
 
 ---
 
@@ -675,7 +699,7 @@ Check for dots. Francis converts dots to underscores on load, so `key_resp.rt` i
 
 **The output has `NaN` for some participants in a condition.**
 
-Either (a) the participant had no trials matching that condition after filtering, or (b) the number of valid trials fell below the **Minimum trials per condition** threshold. Enable *Include trial counts* in the sidebar and re-run to see the `_trls_final` column, which shows exactly how many trials were used.
+Either (a) the participant had no trials matching that condition after filtering, or (b) the number of valid trials fell below the **Minimum trials per condition** threshold. (Count is the exception: a condition without trials is reported as 0.) Enable *Include trial counts* in the sidebar and re-run to see the `_trls_final` column, which shows exactly how many trials were used.
 
 **My error rate denominator is lower than expected.**
 
